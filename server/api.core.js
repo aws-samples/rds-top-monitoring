@@ -66,7 +66,7 @@ gatherPemKeys(issCognitoIdp);
 
 //-- Generate new standard token
 function generateToken(tokenData){
-    const token = jwt.sign(tokenData, secretKey, { expiresIn: configData.aws_token_expiration });
+    const token = jwt.sign(tokenData, secretKey, { expiresIn: 60 * 60 * configData.aws_token_expiration });
     return token ;
 };
 
@@ -262,7 +262,8 @@ app.get("/api/security/rds/disconnect/", (req,res)=>{
     var cognitoToken = verifyTokenCognito(req.headers['x-token-cognito']);
 
     if (standardToken.isValid === false || cognitoToken.isValid === false)
-        return res.status(511).send({ data: [], message : "Token is invalid"});
+        return res.status(511).send({ data: [], message : "Token is invalid. StandardToken : " + String(standardToken.isValid) + ", CognitoToken : " + String(cognitoToken.isValid) });
+
 
     // API Call
     
@@ -339,7 +340,8 @@ app.get("/api/postgres/sql/", (req,res)=>{
     var cognitoToken = verifyTokenCognito(req.headers['x-token-cognito']);
 
     if (standardToken.isValid === false || cognitoToken.isValid === false)
-        return res.status(511).send({ data: [], message : "Token is invalid"});
+        return res.status(511).send({ data: [], message : "Token is invalid. StandardToken : " + String(standardToken.isValid) + ", CognitoToken : " + String(cognitoToken.isValid) });
+
 
     // API Call
     var params = req.query;
@@ -402,7 +404,7 @@ app.get("/api/mysql/sql/", (req,res)=>{
     var cognitoToken = verifyTokenCognito(req.headers['x-token-cognito']);
 
     if (standardToken.isValid === false || cognitoToken.isValid === false)
-        return res.status(511).send({ data: [], message : "Token is invalid"});
+        return res.status(511).send({ data: [], message : "Token is invalid. StandardToken : " + String(standardToken.isValid) + ", CognitoToken : " + String(cognitoToken.isValid) });
 
     // API Call
     var params = req.query;
@@ -475,11 +477,13 @@ app.get("/api/aws/rds/instance/region/list/", (req,res)=>{
 
 // AWS : Cloudwatch Information
 app.get("/api/aws/clw/query/", (req,res)=>{
-
-    var tokenInfo = verifyToken(req.headers['x-token']);
-    if (tokenInfo.isValid === false)
-        return res.status(511).send({ data: [], message : "Token is invalid"});
     
+    var standardToken = verifyToken(req.headers['x-token']);
+    var cognitoToken = verifyTokenCognito(req.headers['x-token-cognito']);
+
+    if (standardToken.isValid === false || cognitoToken.isValid === false)
+        return res.status(511).send({ data: [], message : "Token is invalid. StandardToken : " + String(standardToken.isValid) + ", CognitoToken : " + String(cognitoToken.isValid) });
+
     try {
             
             var params = req.query;
@@ -509,10 +513,12 @@ app.get("/api/aws/clw/query/", (req,res)=>{
 // AWS : Cloudwatch Information
 app.get("/api/aws/clw/region/query/", (req,res)=>{
 
-    var tokenInfo = verifyToken(req.headers['x-token']);
-    if (tokenInfo.isValid === false)
-        return res.status(511).send({ data: [], message : "Token is invalid"});
-    
+    var standardToken = verifyToken(req.headers['x-token']);
+    var cognitoToken = verifyTokenCognito(req.headers['x-token-cognito']);
+
+    if (standardToken.isValid === false || cognitoToken.isValid === false)
+        return res.status(511).send({ data: [], message : "Token is invalid. StandardToken : " + String(standardToken.isValid) + ", CognitoToken : " + String(cognitoToken.isValid) });
+
     try {
         
         var params = req.query;
@@ -544,9 +550,12 @@ app.get("/api/aws/clw/region/query/", (req,res)=>{
 // AWS : Cloudwatch Information
 app.get("/api/aws/clw/region/logs/", (req,res)=>{
     
-    var tokenInfo = verifyToken(req.headers['x-token']);
-    if (tokenInfo.isValid === false)
-        return res.status(511).send({ data: [], message : "Token is invalid"});
+    var standardToken = verifyToken(req.headers['x-token']);
+    var cognitoToken = verifyTokenCognito(req.headers['x-token-cognito']);
+
+    if (standardToken.isValid === false || cognitoToken.isValid === false)
+        return res.status(511).send({ data: [], message : "Token is invalid. StandardToken : " + String(standardToken.isValid) + ", CognitoToken : " + String(cognitoToken.isValid) });
+
     
     try {
         

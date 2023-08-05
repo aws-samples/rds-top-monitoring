@@ -196,7 +196,7 @@ Resources:
                     cd rds-top-monitoring
                     sudo cp -r server frontend conf /aws/apps
                     
-                    echo '{ "aws_region": "${AWS::Region}","aws_cognito_user_pool_id": "${CognitoUserPool}","aws_cognito_user_pool_web_client_id": "${CognitoUserPoolClient}","aws_api_port": 3000,  "aws_token_expiration":"24h" }' > /aws/apps/conf/aws-exports.json
+                    echo '{ "aws_region": "${AWS::Region}","aws_cognito_user_pool_id": "${CognitoUserPool}","aws_cognito_user_pool_web_client_id": "${CognitoUserPoolClient}","aws_api_port": 3000,  "aws_token_expiration":24 }' > /aws/apps/conf/aws-exports.json
                     cd /aws/apps
                     sudo -u ec2-user sh conf/setup.sh
        
