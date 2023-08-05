@@ -1,0 +1,340 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "RDSTop Monitoring Solution"
+Metadata: 
+  AWS::CloudFormation::Interface: 
+    ParameterGroups: 
+      - 
+        Label: 
+          default: "General Configuration"
+        Parameters:
+          - Username
+          - AMIId
+          - InstanceType
+
+      - 
+        Label: 
+          default: "Network Configuration"
+        Parameters:
+          - VPCParam
+          - SubnetParam
+          - PublicAccess
+          - SGInboundAccess
+      
+    ParameterLabels:
+      Username: 
+        default: "Specify Username for access"
+      AMIId: 
+        default: "Specify AWS Linux AMI"
+      InstanceType: 
+        default: "What Instance Type is needed?"
+      VPCParam: 
+        default: "Which VPC should this be deployed to?"
+      SubnetParam: 
+        default: "Which Subnet should this be deployed to?"
+      PublicAccess: 
+        default: "Is Public Access Needed?"
+      SGInboundAccess: 
+        default: "Specify CIDR Inbound Access Rule"
+      
+        
+Parameters:
+
+  VPCParam:
+      Type: AWS::EC2::VPC::Id
+      Description: Select VPC
+
+  SubnetParam:
+    Type: AWS::EC2::Subnet::Id
+    Description: Select VPC Subnet
+
+  AMIId:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Description: AWS AMI
+    Default: '/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64'
+
+  Username:
+      Type: String
+      Description: Username (email)
+      AllowedPattern: "\\w[-\\w.+]*@([A-Za-z0-9][-A-Za-z0-9]+\\.)+[A-Za-z]{2,14}"
+
+  InstanceType:
+      Type: String
+      Description: InstanceType
+      Default: t3a.medium
+      AllowedValues:
+      - t3a.micro
+      - t3a.small
+      - t3a.medium
+      - t3a.large
+      - t3a.xlarge
+  PublicAccess:
+      Type: String
+      Description: Public Access
+      Default: "false"
+      AllowedValues:
+      - "true"
+      - "false"
+
+  SGInboundAccess:
+      Type: String
+      Description: Segurity Group Inbound Access
+      
+  
+      
+Resources:
+    InstanceProfile: 
+        Type: "AWS::IAM::InstanceProfile"
+        DependsOn: IAMRoleEC2
+        Properties: 
+          Path: "/"
+          Roles: 
+            - 
+              Ref: IAMRoleEC2
+          
+    IAMRoleEC2:
+        Type: "AWS::IAM::Role"
+        Properties:
+            Path: "/"
+            RoleName: !Join [ "-", ["role-ec2-rdstop-solution", !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]]]]
+            AssumeRolePolicyDocument: "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Principal\":{\"Service\":\"ec2.amazonaws.com\"},\"Action\":\"sts:AssumeRole\"}]}"
+            MaxSessionDuration: 3600
+            Description: "Allows EC2 instance to call AWS services on your behalf."
+            
+    
+    IAMRoleCognito:
+        Type: "AWS::IAM::Role"
+        Properties:
+            Path: "/"
+            RoleName: !Join [ "-", ["role-cognito-rdstop-solution", !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]]]]
+            AssumeRolePolicyDocument: "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Principal\":{\"Service\":\"cognito-idp.amazonaws.com\"},\"Action\":\"sts:AssumeRole\"}]}"
+            MaxSessionDuration: 3600
+            Description: "Allows Cognito to use SMS MFA on your behalf."
+            Policies:
+            - PolicyName: "CognitoPolicy"
+              PolicyDocument: 
+                Version: "2012-10-17"
+                Statement: 
+                  - Effect: "Allow"
+                    Action:
+                      - "sns:publish"
+                    Resource: "*"
+    
+    IAMPolicy:
+        Type: "AWS::IAM::Policy"
+        Properties:
+            PolicyDocument: !Sub |
+                {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Action": [
+                                "logs:GetLogEvents"
+                            ],
+                            "Resource": [
+                                "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:RDSOSMetrics:log-stream:*"
+                            ]
+                        },
+                        {
+                            "Effect": "Allow",
+                            "Action": [
+                                "cloudwatch:GetMetricData"
+                            ],
+                            "Resource": "*"
+                        },
+                        {
+                            "Effect": "Allow",
+                            "Action": [
+                                "rds:DescribeDBInstances"
+                            ],
+                            "Resource": "arn:aws:rds:${AWS::Region}:${AWS::AccountId}:db:*"
+                        }
+                        
+                        
+                    ]
+                }
+            Roles: 
+              - !Ref IAMRoleEC2
+            PolicyName: !Join [ "-", ["policy-rds-top-solution", !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]]]]
+            
+            
+    EC2Instance:
+        Type: "AWS::EC2::Instance"
+        DependsOn: CognitoUserPool
+        Properties:
+            ImageId: !Ref AMIId
+            InstanceType: !Ref InstanceType
+            KeyName: "key-01-kappa"
+            Tenancy: "default"
+            EbsOptimized: true
+            SourceDestCheck: true
+            BlockDeviceMappings: 
+              - 
+                DeviceName: "/dev/xvda"
+                Ebs: 
+                    Encrypted: false
+                    VolumeSize: 20
+                    VolumeType: "gp2"
+                    DeleteOnTermination: true
+            IamInstanceProfile: !Ref InstanceProfile
+            NetworkInterfaces: 
+              - AssociatePublicIpAddress: !Ref PublicAccess
+                DeviceIndex: "0"
+                GroupSet: 
+                  - Ref: VPCSecurityGroup
+                SubnetId: 
+                  Ref: SubnetParam
+            UserData:
+                Fn::Base64: 
+                  !Sub |
+                    #!/bin/bash
+                    sudo mkdir -p /aws/apps
+                    
+                    cd /tmp
+                    sudo yum install -y git
+                    git clone https://github.com/snunezcode/int-aws-rds-top.git
+                    cd int-aws-rds-top 
+                    sudo cp -r server frontend conf /aws/apps
+                    
+                    echo '{ "aws_region": "${AWS::Region}","aws_cognito_user_pool_id": "${CognitoUserPool}","aws_cognito_user_pool_web_client_id": "${CognitoUserPoolClient}","aws_api_port": 3000,  "aws_token_expiration":"24h" }' > /aws/apps/conf/aws-exports.json
+                    cd /aws/apps
+                    sudo -u ec2-user sh conf/setup.sh
+       
+            Tags: 
+              - 
+                Key: "Name"
+                Value: !Join [ "-", ["ec2-rds-top-solution", !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]]]]
+              
+    
+    VPCSecurityGroup:
+        Type: "AWS::EC2::SecurityGroup"
+        Properties:
+            GroupDescription: !Join [ "_", ["sg_security_group_rds_top_solution", !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]]]]
+            GroupName: !Join [ "_", ["sg_security_group_rds_top_solution", !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]]]]
+            VpcId: !Ref VPCParam
+            SecurityGroupIngress: 
+                - 
+                    CidrIp: !Ref SGInboundAccess
+                    FromPort: 443
+                    IpProtocol: "tcp"
+                    ToPort: 443
+                    
+            SecurityGroupEgress: 
+                - 
+                    CidrIp: "0.0.0.0/0"
+                    IpProtocol: "-1"
+
+
+    CognitoUserPool:
+        Type: "AWS::Cognito::UserPool"
+        Properties:
+            UserPoolName: !Join [ "-", ["AwsRdsTopSolutionUserPool", !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]]]]
+            Policies: 
+                PasswordPolicy: 
+                    MinimumLength: 8
+                    RequireUppercase: true
+                    RequireLowercase: true
+                    RequireNumbers: true
+                    RequireSymbols: true
+                    TemporaryPasswordValidityDays: 7
+            LambdaConfig: {}
+            AutoVerifiedAttributes: 
+              - "email"
+            UsernameAttributes: 
+              - "email"
+            MfaConfiguration: "OPTIONAL"
+            SmsConfiguration: 
+                SnsCallerArn: !GetAtt IAMRoleCognito.Arn 
+                SnsRegion: !Ref AWS::Region
+            EmailConfiguration: 
+                EmailSendingAccount: "COGNITO_DEFAULT"
+            AdminCreateUserConfig: 
+                AllowAdminCreateUserOnly: true
+            UserPoolTags: {}
+            AccountRecoverySetting: 
+                RecoveryMechanisms: 
+                  - 
+                    Priority: 1
+                    Name: "verified_email"
+            UsernameConfiguration: 
+                CaseSensitive: false
+            VerificationMessageTemplate: 
+                DefaultEmailOption: "CONFIRM_WITH_CODE"
+
+    CognitoUserPoolClient:
+        Type: "AWS::Cognito::UserPoolClient"
+        Properties:
+            UserPoolId: !Ref CognitoUserPool
+            ClientName: !Join [ "-", ["AwsRdsTopSolutionUserPoolClient", !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]]]]
+            RefreshTokenValidity: 1
+            ReadAttributes: 
+              - "address"
+              - "birthdate"
+              - "email"
+              - "email_verified"
+              - "family_name"
+              - "gender"
+              - "given_name"
+              - "locale"
+              - "middle_name"
+              - "name"
+              - "nickname"
+              - "phone_number"
+              - "phone_number_verified"
+              - "picture"
+              - "preferred_username"
+              - "profile"
+              - "updated_at"
+              - "website"
+              - "zoneinfo"
+            WriteAttributes: 
+              - "address"
+              - "birthdate"
+              - "email"
+              - "family_name"
+              - "gender"
+              - "given_name"
+              - "locale"
+              - "middle_name"
+              - "name"
+              - "nickname"
+              - "phone_number"
+              - "picture"
+              - "preferred_username"
+              - "profile"
+              - "updated_at"
+              - "website"
+              - "zoneinfo"
+            ExplicitAuthFlows: 
+              - "ALLOW_REFRESH_TOKEN_AUTH"
+              - "ALLOW_USER_SRP_AUTH"
+            PreventUserExistenceErrors: "ENABLED"
+            AllowedOAuthFlowsUserPoolClient: false
+            IdTokenValidity: 60
+            AccessTokenValidity: 60
+            TokenValidityUnits: 
+                AccessToken: "minutes"
+                IdToken: "minutes"
+                RefreshToken: "days"
+
+    CognitoUserPoolUser:
+        Type: "AWS::Cognito::UserPoolUser"
+        Properties:
+            Username: !Ref Username
+            UserPoolId: !Ref CognitoUserPool
+            UserAttributes: 
+              - 
+                Name: "email_verified"
+                Value: "true"
+              - 
+                Name: "email"
+                Value: !Ref Username
+
+Outputs:
+    PublicAppURL:
+        Description: Public Endpoint
+        Value: !Join [ "", ["https://", !GetAtt EC2Instance.PublicIp]]
+    PrivateAppURL:
+        Description: Private Endpoint
+        Value: !Join [ "", ["https://", !GetAtt EC2Instance.PrivateIp]]
+

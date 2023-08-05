@@ -1,0 +1,6 @@
+{
+  "aws_region": "us-east-1",
+  "aws_cognito_user_pool_id": "us-east-1_wgTZ0Ocnu",
+  "aws_cognito_user_pool_web_client_id": "6mbhrj079p787pc0k6gb0bc9qr",
+  "aws_token_expiration": "24h"
+}
