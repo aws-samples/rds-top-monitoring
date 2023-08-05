@@ -1,5 +1,6 @@
 import TopNavigation from '@cloudscape-design/components/top-navigation';
 import { Authenticator } from "@aws-amplify/ui-react";
+import { configuration } from '../pages/Configs';
 
 export default function App() {
 
@@ -13,6 +14,7 @@ export default function App() {
     };
 
     const profileActions = [
+      { type: 'button', id: 'profile', text: 'AppVersion : ' + configuration["apps-settings"]["version"]},
       { type: 'button', id: 'preferences', text: 'Preferences' },
       {
         type: 'menu-dropdown',

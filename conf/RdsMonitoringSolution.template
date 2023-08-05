@@ -310,8 +310,8 @@ Resources:
               - "ALLOW_USER_SRP_AUTH"
             PreventUserExistenceErrors: "ENABLED"
             AllowedOAuthFlowsUserPoolClient: false
-            IdTokenValidity: 60
-            AccessTokenValidity: 60
+            IdTokenValidity: 1440
+            AccessTokenValidity: 1440
             TokenValidityUnits: 
                 AccessToken: "minutes"
                 IdToken: "minutes"

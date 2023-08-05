@@ -3,9 +3,9 @@ export const configuration =
 {
     "apps-settings": {
         "refresh-interval": 10*1000,
-        "refresh-interval-clw": 1*1000,
+        "refresh-interval-clw": 10*1000,
         "api_url": "",
-        "release" : "Version : 0.1.2",
+        "version" : "0.1.0",
         "application_title": "RDSTop Monitoring"
     }
 };
