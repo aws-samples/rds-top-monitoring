@@ -192,7 +192,7 @@ Resources:
                     
                     cd /tmp
                     sudo yum install -y git
-                    git clone https://github.com/snunezcode/int-aws-rds-top.git
+                    git clone https://github.com/aws-samples/rds-top-monitoring.git
                     cd int-aws-rds-top 
                     sudo cp -r server frontend conf /aws/apps
                     
