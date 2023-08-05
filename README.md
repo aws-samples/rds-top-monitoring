@@ -74,7 +74,7 @@ Additional expanded support coming later to :
 
 ## Solution Requirements
 
-### Amazon RDS Enhanced Monitoring
+#### Amazon RDS Enhanced Monitoring
 
 Amazon RDS provides metrics in real time for the operating system (OS) that your DB instance runs on. RDSTop Monitoring solution integrate metrics from Enhanced Monitoring and it has to be enabled. 
 Follow procedure below to turn on Enhanced Monitoring.
@@ -82,7 +82,7 @@ Follow procedure below to turn on Enhanced Monitoring.
 https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/USER_Monitoring.OS.Enabling.html
 
 
-### VPC Network Access to AWS RDS Instances
+#### VPC Network Access to AWS RDS Instances
 
 RDSTop Monitoring Solution needs to access privately AWS RDS Instances, grant access inboud rules and security groups.
 
