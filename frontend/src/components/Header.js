@@ -20,25 +20,18 @@ export default function App({sessionInformation,onClickMenu, onClickDisconnect})
     //-- Navigate Profiling
     const profileActions = [
       { type: 'button', id: 'profile', text: 'SessionID : ' + sessionInformation["session_id"]},
-      { type: 'button', id: 'profile', text: 'AppVersion : ' + configuration["apps-settings"]["version"]},
+      { id: 'version', text: 'AppVersion : ' + configuration["apps-settings"]["version"]},
       { type: 'button', id: 'preferences', text: 'Preferences' },
       {
         type: 'menu-dropdown',
         id: 'support-group',
         text: 'Support',
         items: [
-          {
-            id: 'documentation',
-            text: 'Documentation',
-            href: '#',
-            external: true,
-            externalIconAriaLabel: ' (opens in new tab)',
-          },
-          { id: 'feedback', text: 'Feedback', href: '#', external: true, externalIconAriaLabel: ' (opens in new tab)' },
+          {id: 'documentation',text: 'Documentation'},
+          { id: 'feedback', text: 'Feedback'},
           { id: 'support', text: 'Customer support' },
         ],
-      },
-      { type: 'button', id: 'signout', text: 'Disconnect' },
+      }
     ];
     
    

@@ -21,18 +21,11 @@ export default function App() {
         id: 'support-group',
         text: 'Support',
         items: [
-          {
-            id: 'documentation',
-            text: 'Documentation',
-            href: '#',
-            external: true,
-            externalIconAriaLabel: ' (opens in new tab)',
-          },
-          { id: 'feedback', text: 'Feedback', href: '#', external: true, externalIconAriaLabel: ' (opens in new tab)' },
+          {id: 'documentation',text: 'Documentation'},
+          { id: 'feedback', text: 'Feedback' },
           { id: 'support', text: 'Customer support' },
         ],
-      },
-      { type: 'button', id: 'signout', text: 'Sign out' },
+      }
     ];
     
    
@@ -62,8 +55,7 @@ export default function App() {
                   type: 'menu-dropdown',
                   text:  user.signInUserSession.idToken.payload.email,
                   iconName: 'user-profile',
-                  items: profileActions,
-                  onItemClick : signOut
+                  items: profileActions
                 },
                 {
                   type: 'button',

@@ -29,20 +29,20 @@ https://github.com/aws-samples/rds-top-monitoring/assets/135755418/6bd2d036-78cc
 
 RDSTop Monitoring Solution currently supports following database engines:
 
-- **AWS RDS for MySQL** 
-- **AWS RDS for PostgreSQL** 
-- **AWS RDS for MariaDB** 
-- **Amazon Aurora MySQL-Compatible Edition**
-- **Amazon Aurora PostgreSQL-Compatible Edition** 
+- AWS RDS for MySQL
+- AWS RDS for PostgreSQL
+- AWS RDS for MariaDB
+- Amazon Aurora MySQL-Compatible Edition
+- Amazon Aurora PostgreSQL-Compatible Edition
 
 
 Additional expanded support coming later to :
 
-- **AWS RDS for Oracle** 
-- **AWS RDS for SQLServer**
-- **Amazon DocumentDB** 
-- **Amazon ElastiCache for Redis**
-- **Amazon MemoryDB for Redis** 
+- AWS RDS for Oracle
+- AWS RDS for SQLServer
+- Amazon DocumentDB
+- Amazon ElastiCache for Redis
+- Amazon MemoryDB for Redis
 
 
 
@@ -80,6 +80,11 @@ Amazon RDS provides metrics in real time for the operating system (OS) that your
 Follow procedure below to turn on Enhanced Monitoring.
 
 https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/USER_Monitoring.OS.Enabling.html
+
+
+### VPC Network Access to AWS RDS Instances
+
+RDSTop Monitoring Solution needs to access privately AWS RDS Instances, grant access inboud rules and security groups.
 
 
 
@@ -121,7 +126,7 @@ Follow the step-by-step instructions to configure and deploy the RDSTop into you
 5. Input **AWS Linux AMI** parameter, this parameter specify AWS AMI to build App EC2 Server. Keep default value.
 6. Select **Instance Type** parameter, indicate what instance size is needed.
 7. Select **VPC Name** parameter, indicate VPC to be used to deploy application server.
-8. Select **Subnet Name** parameter, indicate private subnet to be used to deploy application server. This private subnet needs to have internet access.
+8. Select **Subnet Name** parameter, indicate private subnet to be used to deploy application server. This private subnet needs to have internet access, also application server needs to be able to reach AWS RDS Instances, add appropiate inboud rules and security groups.
 9. Select **PublicAccess** parameter, indicate if Public Address is needed. 
 10. Input CIDR Inbound access rule for RDSTop Monitoring Solution.
 11. Click **Next**, Click **Next**, select **acknowledge that AWS CloudFormation might create IAM resources with custom names**. and Click **Submit**.
