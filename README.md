@@ -15,6 +15,8 @@ Based on same simplicity concept of Unix top utility, provide quick and fast vie
 
 <img width="1089" alt="image" src="./images/img04.png">
 
+https://github.com/aws-samples/rds-top-monitoring/assets/135755418/6bd2d036-78cc-4010-8311-f1d6f27f70d6
+
 
 ## How it works?
 
