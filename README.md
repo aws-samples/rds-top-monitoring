@@ -72,6 +72,17 @@ Additional expanded support coming later to :
 
 
 
+## Solution Requirements
+
+### Amazon RDS Enhanced Monitoring
+
+Amazon RDS provides metrics in real time for the operating system (OS) that your DB instance runs on. RDSTop Monitoring solution integrate metrics from Enhanced Monitoring and it has to be enabled. 
+Follow procedure below to turn on Enhanced Monitoring.
+
+https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/USER_Monitoring.OS.Enabling.html
+
+
+
 
 ## Solution Deployment
 
