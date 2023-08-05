@@ -193,7 +193,7 @@ Resources:
                     cd /tmp
                     sudo yum install -y git
                     git clone https://github.com/aws-samples/rds-top-monitoring.git
-                    cd int-aws-rds-top 
+                    cd rds-top-monitoring
                     sudo cp -r server frontend conf /aws/apps
                     
                     echo '{ "aws_region": "${AWS::Region}","aws_cognito_user_pool_id": "${CognitoUserPool}","aws_cognito_user_pool_web_client_id": "${CognitoUserPoolClient}","aws_api_port": 3000,  "aws_token_expiration":"24h" }' > /aws/apps/conf/aws-exports.json
