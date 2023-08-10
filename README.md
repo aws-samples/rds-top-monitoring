@@ -34,12 +34,12 @@ RDSTop Monitoring Solution currently supports following database engines:
 - AWS RDS for MariaDB
 - Amazon Aurora MySQL-Compatible Edition
 - Amazon Aurora PostgreSQL-Compatible Edition
+- AWS RDS for Oracle
+- AWS RDS for SQLServer
 
 
 Additional expanded support coming later to :
 
-- AWS RDS for Oracle
-- AWS RDS for SQLServer
 - Amazon DocumentDB
 - Amazon ElastiCache for Redis
 - Amazon MemoryDB for Redis
@@ -112,6 +112,27 @@ CREATE USER monitor WITH PASSWORD '<PASSWORD>';
 GRANT pg_read_all_stats TO monitor;
 ```
 
+#### MS SQLServer
+```
+USE [master]
+GO
+CREATE LOGIN [monitor] WITH PASSWORD=N'<PASSWORD>', DEFAULT_DATABASE=[master], CHECK_EXPIRATION=ON, CHECK_POLICY=ON
+GO
+use [master]
+GO
+GRANT CONNECT SQL TO [monitor]
+GO
+GRANT VIEW SERVER STATE TO [monitor]
+GO
+```
+
+#### Oracle
+```
+CREATE USER monitor IDENTIFIED BY '<PASSWORD>';
+GRANT CREATE SESSION,SELECT ANY DICTIONARY TO monitor;
+```
+
+
 ### Launch CloudFormation Stack
 
 Follow the step-by-step instructions to configure and deploy the RDSTop into your account.
@@ -131,7 +152,7 @@ Follow the step-by-step instructions to configure and deploy the RDSTop into you
 10. Input CIDR Inbound access rule for RDSTop Monitoring Solution.
 11. Click **Next**, Click **Next**, select **acknowledge that AWS CloudFormation might create IAM resources with custom names**. and Click **Submit**.
 12. Once Cloudformation has been deployed, gather application URL from output stack section. Username will be same you introduce on step 4 and temporary password will be sent by AWS Cognito Service.
-
+13. Application deployment will take around 5 minutes to be completed.
 
 > **Note:** Because you are connecting to a site with a self-signed, untrusted host certificate, your browser may display a series of security warnings. 
 Override the warnings and proceed to the site. To prevent site visitors from encountering warning screens, you must obtain a trusted, 

@@ -95,12 +95,9 @@ export default function App() {
     //-- Performance Counters
     const initProcess = useRef(0);
     const metricObjectGlobal = useRef(new classMetric([
-                                                        {name : "Com_select", history : 50 },
-                                                        {name : "Com_update", history : 50 },
-                                                        {name : "Com_delete", history : 50 },
-                                                        {name : "Com_insert", history : 50 },
+                                                        {name : "user calls", history : 50 },
+                                                        {name : "user commits", history : 50 },
                                                         {name : "Sessions", history : 50 },
-                                                        {name : "Queries", history : 50 },
                                                         {name : "Cpu_total", history : 50 },
                                                         {name : "Cpu_user", history : 50 },
                                                         {name : "Cpu_system", history : 50 },
@@ -132,11 +129,8 @@ export default function App() {
                                                                   dataCounters: [],
                                                                   timestamp : 0,
                                                                   refObject : new classMetric([
-                                                                                                {name : "Com_select", history : 50 },
-                                                                                                {name : "Com_update", history : 50 },
-                                                                                                {name : "Com_delete", history : 50 },
-                                                                                                {name : "Com_insert", history : 50 },
-                                                                                                {name : "Queries", history : 50 }
+                                                                                                {name : "user calls", history : 50 },
+                                                                                                {name : "user commits", history : 50 }
                                                                                               ])
                                                                 });
     
@@ -147,17 +141,55 @@ export default function App() {
                                                                 });
     
     
-    const dataSessionQuery = "SELECT ID as 'ThreadID',USER as 'Username',HOST as 'Host',DB as 'Database',COMMAND as 'Command',SEC_TO_TIME(TIME) as 'Time',STATE as 'State',INFO as 'SQLText' FROM INFORMATION_SCHEMA.PROCESSLIST WHERE COMMAND <> 'Sleep' AND COMMAND <> 'Daemon' AND CONNECTION_ID()<> ID ORDER BY TIME DESC LIMIT 250";
+    const dataSessionQuery = `SELECT SES.SID,   
+                                   SES.STATUS,
+                                   nvl(ses.username,'ORACLE PROC')||' ('||ses.sid||')' USERNAME,
+                                   SES.MACHINE, 
+                                   SES.PROGRAM,
+                                   SES.EVENT,       
+                                  ltrim(to_char(floor(SES.LAST_CALL_ET/3600), '09')) || ':'
+                                   || ltrim(to_char(floor(mod(SES.LAST_CALL_ET, 3600)/60), '09')) || ':'
+                                   || ltrim(to_char(mod(SES.LAST_CALL_ET, 60), '09')) LAST_CALL_ET,
+                                   SES.SQL_ID,
+                                   REPLACE(SQL.SQL_TEXT,CHR(128),'') SQL_TEXT
+                              FROM V$SESSION SES,   
+                                   V$SQLTEXT SQL 
+                              WHERE 
+                                SES.STATUS = 'ACTIVE'
+                                and SES.USERNAME is not null
+                                and SES.SQL_ADDRESS    = SQL.ADDRESS 
+                                and SES.SQL_HASH_VALUE = SQL.HASH_VALUE 
+                                and SES.AUDSID <> userenv('SESSIONID') 
+                                and SES.LAST_CALL_ET > 1
+                             ORDER BY 
+                                SES.LAST_CALL_ET desc`;
     const dataSessionColumns=[
-                    { id: "ThreadID",header: "ThreadID",cell: item => item['ThreadID'] || "-",sortingField: "ThreadID",isRowHeader: true },
-                    { id: "Username",header: "Username",cell: item => item['Username'] || "-",sortingField: "Username",isRowHeader: true },
-                    { id: "Host",header: "Host",cell: item => item['Host'] || "-",sortingField: "Host",isRowHeader: true },
-                    { id: "Database",header: "Database",cell: item => item['Database'] || "-",sortingField: "Database",isRowHeader: true },
-                    { id: "Command",header: "Command",cell: item => item['Command'] || "-",sortingField: "Command",isRowHeader: true },
-                    { id: "ElapsedTime",header: "ElapsedTime",cell: item => item['Time'] || "-",sortingField: "Time",isRowHeader: true },
-                    { id: "State",header: "State",cell: item => item['State'] || "-",sortingField: "State",isRowHeader: true },
-                    { id: "SQLText",header: "SQLText",cell: item => item['SQLText'] || "-",sortingField: "SQLText",isRowHeader: true } 
+                    { id: "SID",header: "Sid",cell: item => item[0] || "-",sortingField: "sid",isRowHeader: true },
+                    { id: "State",header: "State",cell: item => item[1] || "-",sortingField: "status",isRowHeader: true },
+                    { id: "Username",header: "Username",cell: item => item[2] || "-",sortingField: "username",isRowHeader: true },
+                    { id: "Host",header: "Host",cell: item => item[3] || "-",sortingField: "machine",isRowHeader: true },
+                    { id: "Program",header: "Program",cell: item => item[4] || "-",sortingField: "program",isRowHeader: true },
+                    { id: "Event",header: "Event",cell: item => item[5] || "-",sortingField: "event",isRowHeader: true },
+                    { id: "ElapsedTime",header: "ElapsedTime",cell: item => item[6] || "-",sortingField: "last_call_et",isRowHeader: true },
+                    { id: "SQLID",header: "SqlId",cell: item => item[7] || "-",sortingField: "State",isRowHeader: true },
+                    { id: "SQLText",header: "SQLText",cell: item => item[8] || "-",sortingField: "SQLText",isRowHeader: true } 
                     ];
+    
+    const dataMetricsQuery =  `select name,value from v$sysstat where name in 
+                                (
+                                'user calls',
+                                'user commits',
+                                'redo writes',
+                                'physical write total IO requests',
+                                'physical write total bytes',
+                                'physical read total IO requests',
+                                'physical read total bytes',
+                                'logons current',
+                                'db block gets',
+                                'db block changes',
+                                'consistent gets'
+                                )
+                              `;
     
     
     //--######## Enhanced Monitoring Feature
@@ -243,16 +275,17 @@ export default function App() {
         //--- API Call Performance Counters
         var api_params = {
                       connection: cnf_connection_id,
-                      sql_statement: "SHOW GLOBAL STATUS"
+                      sql_statement: dataMetricsQuery
                       };
 
         
-        Axios.get(`${configuration["apps-settings"]["api_url"]}/api/mysql/sql/`,{
+        Axios.get(`${configuration["apps-settings"]["api_url"]}/api/oracle/sql/`,{
               params: api_params
               }).then((data)=>{
 
                   var timeNow = new Date();
-                  var currentCounters = convertArrayToObject(data.data,'Variable_name');
+                  var currentCounters = convertArrayToObject(data.data.rows,0);
+                  
                   
                   if ( initProcess.current === 0 ){
                     //-- Initialize snapshot data
@@ -264,21 +297,15 @@ export default function App() {
                   metricObjectGlobal.current.newSnapshot(currentCounters, timeNow.getTime());
                   
                   //-- Add metrics
-                  metricObjectGlobal.current.addPropertyValue('Com_select',metricObjectGlobal.current.getDelta('Com_select'));
-                  metricObjectGlobal.current.addPropertyValue('Com_update',metricObjectGlobal.current.getDelta('Com_update'));
-                  metricObjectGlobal.current.addPropertyValue('Com_delete',metricObjectGlobal.current.getDelta('Com_delete'));
-                  metricObjectGlobal.current.addPropertyValue('Com_insert',metricObjectGlobal.current.getDelta('Com_update'));
-                  metricObjectGlobal.current.addPropertyValue('Queries',metricObjectGlobal.current.getDelta('Queries'));
+                  metricObjectGlobal.current.addPropertyValue('user calls',metricObjectGlobal.current.getDeltaByValue('user calls',1));
+                  metricObjectGlobal.current.addPropertyValue('user commits',metricObjectGlobal.current.getDeltaByValue('user commits',1));
                   
                   if (currentTabId.current === "tab01"){
                     
                       setDataMetricRealTime({ 
-                                            Queries:[metricObjectGlobal.current.getPropertyValues('Queries')],
+                                            Queries:[metricObjectGlobal.current.getPropertyValues('user calls')],
                                             Operations : [
-                                                          metricObjectGlobal.current.getPropertyValues('Com_select'),
-                                                          metricObjectGlobal.current.getPropertyValues('Com_update'),
-                                                          metricObjectGlobal.current.getPropertyValues('Com_delete'),
-                                                          metricObjectGlobal.current.getPropertyValues('Com_insert')
+                                                          metricObjectGlobal.current.getPropertyValues('user commits')
                                                           ],
                                             refObject : metricObjectGlobal.current,
                                             timestamp : timeNow.getTime()
@@ -289,7 +316,7 @@ export default function App() {
     
               })
               .catch((err) => {
-                  console.log('Timeout API Call : /api/mysql/sql/' );
+                  console.log('Timeout API Call : /api/oracle/sql/' );
                   console.log(err)
                     
               });
@@ -310,16 +337,15 @@ export default function App() {
                       sql_statement: dataSessionQuery
                       };
     
-        Axios.get(`${configuration["apps-settings"]["api_url"]}/api/mysql/sql/`,{
+        Axios.get(`${configuration["apps-settings"]["api_url"]}/api/oracle/sql/`,{
               params: api_params
               }).then((data)=>{
-                  
                   var timeNow = new Date();
-                  metricObjectGlobal.current.addPropertyValue('Sessions',data.data.length);
+                  metricObjectGlobal.current.addPropertyValue('Sessions',data.data.rows.length);
                   if (currentTabId.current === "tab01"){
                     
                       setDataMetricRealTimeSession({ 
-                                            Sessions : data.data,
+                                            Sessions : data.data.rows,
                                             SessionsTotal : [metricObjectGlobal.current.getPropertyValues('Sessions')],
                                             timestamp : timeNow.getTime()
                                             
@@ -330,7 +356,7 @@ export default function App() {
                   
               })
               .catch((err) => {
-                  console.log('Timeout API Call : /api/mysql/sql/' );
+                  console.log('Timeout API Call : /api/oracle/sql/' );
                   console.log(err)
                   
               });
@@ -508,28 +534,45 @@ export default function App() {
           
         };
     
-        Axios.get(`${configuration["apps-settings"]["api_url"]}/api/mysql/sql/`,{
+        Axios.get(`${configuration["apps-settings"]["api_url"]}/api/oracle/sql/`,{
               params: api_params
               }).then((data)=>{
-                  
                   var colInfo=[];
+                  var rowsInfo=[];
                   try{
                     
-                        if (Array.isArray(data.data)){
-                            var columns = Object.keys(data.data[0]);
-                            columns.forEach(function(colItem) {
-                                colInfo.push({ id: colItem, header: colItem,cell: item => item[colItem] || "-",sortingField: colItem,isRowHeader: true });
+                        if (Array.isArray(data.data.metadata)){
+                            
+                            data.data.metadata.forEach(function(colItem) {
+                                colInfo.push({ id: colItem['name'], header: colItem['name'], cell: item => item[colItem['name']],sortingField: colItem['name'],isRowHeader: true });
                             })
                         }
+                        if (Array.isArray(data.data.rows)){
+                            
+                            data.data.rows.forEach(function(rowItem) {
+                                var iCol=0;
+                                var row=[];
+                                data.data.metadata.forEach(colName => {
+                                    row[colName['name']] = rowItem[iCol];
+                                    iCol++;
+                                });
+                                rowsInfo.push(row);
+                                
+                            })
+                            
+                        }
+                        
                     
                   }
                   catch {
                     
                     colInfo = [];
+                    rowsInfo = [];
                     
                   }
                   
-                  setdataQuery({columns:colInfo, dataset: data.data, result_code:0, result_info: ""});
+                  
+                  setdataQuery({columns:colInfo, dataset: rowsInfo, result_code:0, result_info: ""});
                 
                 
               })
@@ -576,7 +619,7 @@ export default function App() {
         onSplitPanelToggle={() => setsplitPanelShow(false)}
         splitPanelSize={250}
         splitPanel={
-                  <SplitPanel  header={"Session Details (" + selectedItems[0].ThreadID + ")"} i18nStrings={splitPanelI18nStrings} closeBehavior="hide"
+                  <SplitPanel  header={"Session Details (" + selectedItems[0][0] + ")"} i18nStrings={splitPanelI18nStrings} closeBehavior="hide"
                     onSplitPanelToggle={({ detail }) => {
                                     
                                     }
@@ -585,35 +628,35 @@ export default function App() {
                       
                     <ColumnLayout columns="4" variant="text-grid">
                          <div>
-                              <Box variant="awsui-key-label">ThreadID</Box>
-                              {selectedItems[0]['ThreadID']}
+                              <Box variant="awsui-key-label">SID</Box>
+                              {selectedItems[0][0]}
                           </div>
                           <div>
                               <Box variant="awsui-key-label">Username</Box>
-                              {selectedItems[0]['Username']}
+                              {selectedItems[0][2]}
                           </div>
                           <div>
                               <Box variant="awsui-key-label">Host</Box>
-                              {selectedItems[0]['Host']}
+                              {selectedItems[0][3]}
                           </div>
                           <div>
-                              <Box variant="awsui-key-label">Database</Box>
-                              {selectedItems[0]['Database']}
+                              <Box variant="awsui-key-label">Program</Box>
+                              {selectedItems[0][4]}
                           </div>
                         </ColumnLayout>
                 
                         <ColumnLayout columns="4" variant="text-grid">
                          <div>
-                              <Box variant="awsui-key-label">Time</Box>
-                              {selectedItems[0]['Time']}
+                              <Box variant="awsui-key-label">ElapsedTime</Box>
+                              {selectedItems[0][6]}
                           </div>
                           <div>
                               <Box variant="awsui-key-label">State</Box>
-                              {selectedItems[0]['State']}
+                              {selectedItems[0][1]}
                           </div>
                           <div>
                               <Box variant="awsui-key-label">SQLText</Box>
-                              {selectedItems[0]['SQLText']}
+                              {selectedItems[0][8]}
                           </div>
                         
                         </ColumnLayout>
@@ -720,71 +763,67 @@ export default function App() {
                                                   <tr>  
                                                     <td style={{"width":"12.5%","padding-left": "1em"}}> 
                                                         <CompMetric02
-                                                          value={dataMetricRealTime.refObject.getDelta('Queries')}
-                                                          title={"Queries/sec"}
+                                                          value={dataMetricRealTime.refObject.getDeltaByValue('user calls',1)}
+                                                          title={"User Calls/sec"}
                                                           precision={0}
                                                         />
  
                                                     </td>
                                                     <td style={{"width":"12.5%", "border-left": "2px solid #e3e5e7", "padding-left": "1em"}}>
                                                          <CompMetric02
-                                                          value={dataMetricRealTime.refObject.getDelta('Com_select')}
-                                                          title={"Selects/sec"}
+                                                          value={dataMetricRealTime.refObject.getDeltaByValue('user commits',1)}
+                                                          title={"User commits/sec"}
                                                           type={1}
                                                           precision={0}
                                                         />
                                                     </td>
                                                     <td style={{"width":"12.5%", "border-left": "2px solid #e3e5e7", "padding-left": "1em"}}>
                                                          <CompMetric02
-                                                          value={dataMetricRealTime.refObject.getDelta('Com_insert')}
-                                                          title={"Insert/sec"}
+                                                          value={dataMetricRealTime.refObject.getDeltaByValue('physical write total IO requests',1)}
+                                                          title={"DB IO Writes/sec"}
                                                           type={1}
                                                           precision={0}
                                                         />
                                                     </td>
                                                     <td style={{"width":"12.5%", "border-left": "2px solid #e3e5e7", "padding-left": "1em"}}>
                                                          <CompMetric02
-                                                          value={dataMetricRealTime.refObject.getDelta('Com_update')}
-                                                          title={"Update/sec"}
+                                                          value={dataMetricRealTime.refObject.getDeltaByValue('physical read total IO requests',1)}
+                                                          title={"DB IO Reads/sec"}
                                                           type={1}
                                                           precision={0}
                                                         />
                                                     </td>
                                                     <td style={{"width":"12.5%", "border-left": "2px solid #e3e5e7", "padding-left": "1em"}}>
                                                          <CompMetric02
-                                                          value={dataMetricRealTime.refObject.getDelta('Com_delete')}
-                                                          title={"Delete/sec"}
-                                                          type={1}
+                                                          value={dataMetricRealTime.refObject.getDeltaByValue('redo writes',1)}
+                                                          title={"Redo Writes/sec"}
+                                                          format={1}
                                                           precision={0}
                                                         />
                                                     </td>
                                                     <td style={{"width":"12.5%", "border-left": "2px solid #e3e5e7", "padding-left": "1em"}}>
                                                         <CompMetric02
-                                                          value={dataMetricRealTime.refObject.getValue('Threads_connected')}
-                                                          title={"Threads"}
-                                                          type={2}
+                                                          value={dataMetricRealTime.refObject.getValueByValue('logons current',1)}
+                                                          title={"Logons Current"}
+                                                          format={2}
                                                           precision={0}
                                                         />
                                                     </td>
                                                     <td style={{"width":"12.5%", "border-left": "2px solid #e3e5e7", "padding-left": "1em"}}>
                                                          <CompMetric02
-                                                          value={dataMetricRealTime.refObject.getDelta('Bytes_received')}
-                                                          title={"BytesReceived/sec"}
+                                                          value={dataMetricRealTime.refObject.getDeltaByValue('db block changes',1)}
+                                                          title={"DB Block Changes/sec"}
                                                           type={1}
                                                           precision={0}
-                                                          format={2}
                                                         />
-                                                    </td>
-                                                    <td style={{"width":"12.5%", "border-left": "2px solid #e3e5e7", "padding-left": "1em"}}>
-                                                        <CompMetric02
-                                                          value={dataMetricRealTime.refObject.getDelta('Bytes_sent')}
-                                                          title={"BytesSent/sec"}
+                                                    </td><td style={{"width":"12.5%", "border-left": "2px solid #e3e5e7", "padding-left": "1em"}}>
+                                                         <CompMetric02
+                                                          value={dataMetricRealTime.refObject.getDeltaByValue('db block gets',1)}
+                                                          title={"DB Block Gets/sec"}
                                                           type={1}
                                                           precision={0}
-                                                          format={2}
                                                         />
                                                     </td>
-                                                   
                                               </tr>  
                                               
                                               </table>  
@@ -796,10 +835,10 @@ export default function App() {
                                                         <ChartLine02 series={dataMetricRealTimeSession['SessionsTotal']} timestamp={dataMetricRealTime['timestamp']} title={"Active Sessions"} height="200px" />
                                                     </td>
                                                     <td style={{"width":"25%","padding-left": "1em"}}> 
-                                                        <ChartLine02 series={dataMetricRealTime['Queries']} timestamp={dataMetricRealTime['timestamp']} title={"Queries/sec"} height="200px" />
+                                                        <ChartLine02 series={dataMetricRealTime['Queries']} timestamp={dataMetricRealTime['timestamp']} title={"User Calls/sec"} height="200px" />
                                                     </td>
                                                     <td style={{"width":"25%","padding-left": "1em"}}> 
-                                                        <ChartLine02 series={dataMetricRealTime['Operations']} timestamp={dataMetricRealTime['timestamp']} title={"Operations/sec"} height="200px" />
+                                                        <ChartLine02 series={dataMetricRealTime['Operations']} timestamp={dataMetricRealTime['timestamp']} title={"User Commits/sec"} height="200px" />
                                                     </td>
                                                   </tr>
                                               </table>

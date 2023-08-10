@@ -82,7 +82,8 @@ function Login() {
     
     //-- Handle Click Events
     const handleClickLogin = () => {
-    
+            
+            console.log(selectedItems[0]['engine']);
             // Add CSRF Token
             Axios.defaults.headers.common['x-csrf-token'] = sessionStorage.getItem("x-csrf-token");
 
@@ -93,10 +94,12 @@ function Login() {
                           port: selectedItems[0]['port'], 
                           username: txtUser, 
                           password: txtPassword, 
-                          engine: selectedItems[0]['engine']
+                          engine: selectedItems[0]['engine'],
+                          instance : selectedItems[0]['instance']
                   
                 }
             }).then((data)=>{
+                console.log(data);
                 if (data.data.result === "auth1") {
                      sessionStorage.setItem(data.data.session_id, data.data.session_token );
                      var session_id = CryptoJS.AES.encrypt(JSON.stringify({
@@ -137,7 +140,19 @@ function Login() {
                           case "aurora-postgresql":
                             path_name = "/sm-postgresql-02";
                             break;
-                            
+                          
+                          case "sqlserver-se":
+                            path_name = "/sm-mssql-01";
+                            break;
+                          
+                          case "oracle-ee":
+                          case "oracle-ee-cdb":
+                          case "oracle-se2":
+                          case "oracle-se2-cdb":
+                            path_name = "/sm-oracle-01";
+                            break;
+                          
+                          
                           default:
                              break;
                             
@@ -183,7 +198,7 @@ function Login() {
             const { data } = await Axios.get(`${configuration["apps-settings"]["api_url"]}/api/aws/rds/instance/region/list/`);
             sessionStorage.setItem("x-csrf-token", data.csrfToken );
             data.data.DBInstances.forEach(function(item) {
-                          if (item['Engine']==='mysql' || item['Engine']==='postgres' || item['Engine']==='mariadb' || item['Engine']==='aurora-mysql' || item['Engine']==='aurora-postgresql'  /* || item['Engine']==='docdb' */  ){
+                          if (item['Engine']==='mysql' || item['Engine']==='postgres' || item['Engine']==='mariadb' || item['Engine']==='aurora-mysql' || item['Engine']==='aurora-postgresql' || item['Engine']==='sqlserver-se' || item['Engine']==='sqlserver-ee' || item['Engine']==='sqlserver-web' || item['Engine']==='sqlserver-ex' || item['Engine']==='oracle-ee'  || item['Engine']==='oracle-ee-cdb'  || item['Engine']==='oracle-se2'  || item['Engine']==='oracle-se2-cdb'){
                             
                             try{
                                   rdsItems.push({
@@ -200,7 +215,8 @@ function Login() {
                                                 storageSize:  item['AllocatedStorage'],
                                                 username: item['MasterUsername'], 
                                                 endpoint: item['Endpoint']['Address'], 
-                                                port: item['Endpoint']['Port']
+                                                port: item['Endpoint']['Port'],
+                                                instance : item['DBName']
                                                 
                                   });
                                   
@@ -212,6 +228,7 @@ function Login() {
                           }
                           
             })
+                                  
             
         }
         catch{
@@ -336,6 +353,10 @@ function Login() {
                               <div>
                                   <Box variant="awsui-key-label">Storage Size(GB)</Box>
                                   {selectedItems[0]['storageSize']}
+                              </div>
+                              <div>
+                                  <Box variant="awsui-key-label">Instance</Box>
+                                  {selectedItems[0]['instance']}
                               </div>
                               
                             </ColumnLayout>

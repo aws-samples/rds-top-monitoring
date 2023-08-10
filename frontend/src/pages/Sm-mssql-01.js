@@ -95,28 +95,19 @@ export default function App() {
     //-- Performance Counters
     const initProcess = useRef(0);
     const metricObjectGlobal = useRef(new classMetric([
-                                                        {name : "Com_select", history : 50 },
-                                                        {name : "Com_update", history : 50 },
-                                                        {name : "Com_delete", history : 50 },
-                                                        {name : "Com_insert", history : 50 },
+                                                        {name : "Transactions", history : 50 },
                                                         {name : "Sessions", history : 50 },
-                                                        {name : "Queries", history : 50 },
-                                                        {name : "Cpu_total", history : 50 },
+                                                        {name : "Requests", history : 50 },
                                                         {name : "Cpu_user", history : 50 },
-                                                        {name : "Cpu_system", history : 50 },
-                                                        {name : "Cpu_wait", history : 50 },
-                                                        {name : "Cpu_irq", history : 50 },
-                                                        {name : "Cpu_guest", history : 50 },
-                                                        {name : "Cpu_steal", history : 50 },
-                                                        {name : "Cpu_nice", history : 50 },
+                                                        {name : "Cpu_kern", history : 50 },
                                                         {name : "Memory_total", history : 50 },
-                                                        {name : "Memory_active", history : 50 },
-                                                        {name : "Memory_inactive", history : 50 },
+                                                        {name : "Memory_commit", history : 50 },
+                                                        {name : "Memory_sqlsrv", history : 50 },
                                                         {name : "Memory_free", history : 50 },
-                                                        {name : "IO_reads_rsdev", history : 50 },
-                                                        {name : "IO_reads_filesystem", history : 50 },
-                                                        {name : "IO_writes_rsdev", history : 50 },
-                                                        {name : "IO_writes_filesystem", history : 50 },
+                                                        {name : "IO_reads_count_ps", history : 50 },
+                                                        {name : "IO_writes_count_ps", history : 50 },
+                                                        {name : "IO_reads_bytes_ps", history : 50 },
+                                                        {name : "IO_writes_bytes_ps", history : 50 },
                                                         {name : "Network_tx", history : 50 },
                                                         {name : "Network_rx", history : 50 }
                                                         
@@ -124,19 +115,17 @@ export default function App() {
     ]));
     
     
+    
     //-- Metric Variables
     const [dataMetricRealTime,setDataMetricRealTime] = useState({
-                                                                  Queries : [],
-                                                                  Operations : [],
+                                                                  Transactions : [],
+                                                                  Requests : [],
                                                                   dataSessions: [],
                                                                   dataCounters: [],
                                                                   timestamp : 0,
                                                                   refObject : new classMetric([
-                                                                                                {name : "Com_select", history : 50 },
-                                                                                                {name : "Com_update", history : 50 },
-                                                                                                {name : "Com_delete", history : 50 },
-                                                                                                {name : "Com_insert", history : 50 },
-                                                                                                {name : "Queries", history : 50 }
+                                                                                                {name : "Transactions", history : 50 },
+                                                                                                {name : "Requests", history : 50 }
                                                                                               ])
                                                                 });
     
@@ -147,57 +136,92 @@ export default function App() {
                                                                 });
     
     
-    const dataSessionQuery = "SELECT ID as 'ThreadID',USER as 'Username',HOST as 'Host',DB as 'Database',COMMAND as 'Command',SEC_TO_TIME(TIME) as 'Time',STATE as 'State',INFO as 'SQLText' FROM INFORMATION_SCHEMA.PROCESSLIST WHERE COMMAND <> 'Sleep' AND COMMAND <> 'Daemon' AND CONNECTION_ID()<> ID ORDER BY TIME DESC LIMIT 250";
+    const dataSessionQuery =  `SELECT 
+                              	 owt.session_id, 
+                              	 es.login_name,
+                              	 es.status,
+                              	 db_name(es.database_id) database_name,
+                              	 CONCAT(
+                										RIGHT('0' + CAST(er.total_elapsed_time/(1000*60*60) AS VARCHAR(2)),2), ':',
+                										RIGHT('0' + CAST((er.total_elapsed_time%(1000*60*60))/(1000*60) AS VARCHAR(2)),2), ':',
+                										RIGHT('0' + CAST(((er.total_elapsed_time%(1000*60*60))%(1000*60))/1000 AS VARCHAR(2)),2)
+                								 ) AS total_elapsed_time, 
+                              	 es.host_name,
+                              	 es.program_name, 
+                              	 owt.wait_type,
+                              	 est.text as sql_text
+                              FROM 
+                              		sys.dm_os_waiting_tasks [owt] 
+                              		INNER JOIN sys.dm_exec_sessions [es] ON 
+                              		[owt].[session_id] = [es].[session_id] 
+                              		INNER JOIN sys.dm_exec_requests [er] ON 
+                              		[es].[session_id] = [er].[session_id] 
+                              		OUTER APPLY sys.dm_exec_sql_text ([er].[sql_handle]) [est] 
+                              WHERE 
+                              	es.is_user_process = 1 
+                              	and
+                              	er.total_elapsed_time > 1000
+                              ORDER BY 
+                              	er.total_elapsed_time desc
+                              `;
+                              
+
     const dataSessionColumns=[
-                    { id: "ThreadID",header: "ThreadID",cell: item => item['ThreadID'] || "-",sortingField: "ThreadID",isRowHeader: true },
-                    { id: "Username",header: "Username",cell: item => item['Username'] || "-",sortingField: "Username",isRowHeader: true },
-                    { id: "Host",header: "Host",cell: item => item['Host'] || "-",sortingField: "Host",isRowHeader: true },
-                    { id: "Database",header: "Database",cell: item => item['Database'] || "-",sortingField: "Database",isRowHeader: true },
-                    { id: "Command",header: "Command",cell: item => item['Command'] || "-",sortingField: "Command",isRowHeader: true },
-                    { id: "ElapsedTime",header: "ElapsedTime",cell: item => item['Time'] || "-",sortingField: "Time",isRowHeader: true },
-                    { id: "State",header: "State",cell: item => item['State'] || "-",sortingField: "State",isRowHeader: true },
-                    { id: "SQLText",header: "SQLText",cell: item => item['SQLText'] || "-",sortingField: "SQLText",isRowHeader: true } 
+                    { id: "SessionId",header: "SessionId",cell: item => item['session_id'] || "-",sortingField: "session_id",isRowHeader: true },
+                    { id: "Username",header: "Username",cell: item => item['login_name'] || "-",sortingField: "login_name",isRowHeader: true },
+                    { id: "Status",header: "Status",cell: item => item['status'] || "-",sortingField: "status",isRowHeader: true },
+                    { id: "Database",header: "Database",cell: item => item['database_name'] || "-",sortingField: "database_name",isRowHeader: true },
+                    { id: "ElapsedTime",header: "ElapsedTime",cell: item => item['total_elapsed_time'] || "-",sortingField: "total_elapsed_time",isRowHeader: true },
+                    { id: "Host",header: "Host",cell: item => item['host_name'] || "-",sortingField: "host_name",isRowHeader: true },
+                    { id: "Program",header: "Program",cell: item => item['program_name'] || "-",sortingField: "program_name",isRowHeader: true },
+                    { id: "WaitType",header: "WaitType",cell: item => item['wait_type'] || "-",sortingField: "wait_type",isRowHeader: true },
+                    { id: "SQLText",header: "SQLText",cell: item => item['sql_text'] || "-",sortingField: "sql_text",isRowHeader: true } 
                     ];
     
+    const dataMetricsQuery =  `select rtrim(counter_name) counter_name,cntr_value from sys.dm_os_performance_counters
+                               where 
+                               rtrim(object_name) like '%SQLServer:General Statistics%'
+                               or
+                               (rtrim(object_name) like '%SQLServer:Databases%' and instance_name='_Total')
+                               or
+                               rtrim(object_name) like '%SQLServer:SQL Statistics%'
+                               or 
+                               rtrim(object_name) like '%SQLServer:Buffer Manager%'
+                              `;
     
+    
+
+
+
     //--######## Enhanced Monitoring Feature
     const dataColsProcessList=[
-                    { id: "id",header: "PID",cell: item => item['id'] || "-",sortingField: "id",isRowHeader: true },
-                    { id: "parentID",header: "ParentPID",cell: item => item['parentID'] || "-",sortingField: "parentID",isRowHeader: true },
                     { id: "name",header: "Name",cell: item => item['name'] || "-",sortingField: "name",isRowHeader: true },
-                    { id: "cpuUsedPc",header: "CPU",cell: item => item['cpuUsedPc'] || "-",sortingField: "cpuUsedPc",isRowHeader: true },
-                    { id: "memoryUsedPc",header: "Memory",cell: item => item['memoryUsedPc'] || "-",sortingField: "memoryUsedPc",isRowHeader: true },
-                    { id: "rss",header: "RSS",cell: item => item['rss'] || "-",sortingField: "rss",isRowHeader: true },
-                    { id: "vmlimit",header: "VMLimit",cell: item => item['vmlimit'] || "-",sortingField: "vmlimit",isRowHeader: true },
-                    { id: "vss",header: "VSS",cell: item => item['vss'] || "-",sortingField: "vss",isRowHeader: true },
-                    { id: "tgid",header: "TGID",cell: item => item['tgid'] || "-",sortingField: "tgid",isRowHeader: true }
+                    { id: "cpuUsedPc",header: "CPU(%)",cell: item => item['cpuUsedPc'] || "-",sortingField: "cpuUsedPc",isRowHeader: true },
+                    { id: "memUsedPc",header: "Memory(%)",cell: item => item['memUsedPc'] || "-",sortingField: "memUsedPc",isRowHeader: true },
+                    { id: "workingSetKb",header: "WorkingSet(KB)",cell: item => item['workingSetKb'] || "-",sortingField: "workingSetKb",isRowHeader: true },
+                    { id: "workingSetPrivKb",header: "WorkingSetPrivate(KB)",cell: item => item['workingSetPrivKb'] || "-",sortingField: "workingSetPrivKb",isRowHeader: true },
+                    { id: "workingSetShareableKb",header: "WorkingSetPrivateShareble(KB)",cell: item => item['workingSetShareableKb'] || "-",sortingField: "workingSetShareableKb",isRowHeader: true },
+                    { id: "virtKb",header: "Virtual(KB)",cell: item => item['virtKb'] || "-",sortingField: "virtKb",isRowHeader: true }
                     ];
-    
-    
     
     const [dataEnhancedMonitor,setdataEnhancedMonitor] = useState({
                                             counters : { 
                                                         cpu: [{name:'pct_usage',value:0},{name:'total_vcpu', value: 0}],
                                                         cpu_detail : [
                                                               {name:'user', value: 0},
-                                                              {name:'system', value: 0},
-                                                              {name:'wait', value: 0},
-                                                              {name:'irq', value: 0},
-                                                              {name:'guest', value: 0},
-                                                              {name:'steal', value: 0},
-                                                              {name:'nice', value: 0}
+                                                              {name:'kern', value: 0}
                                                           ],
-                                                        memory : [{name:'pct_usage',value:0}, {name:'total',value:0}, {name:'free',value:0}, {name:'active',value:0}], 
+                                                        memory : [{name:'pct_usage',value:0}, {name:'total',value:0}, {name:'free',value:0}, {name:'sqlsrv',value:0}], 
                                                         memory_detail : [
                                                               {name:'total', value: 0},
-                                                              {name:'active', value: 0},
-                                                              {name:'inactive', value: 0},
+                                                              {name:'commit', value: 0},
+                                                              {name:'sqlsrv', value: 0},
                                                               {name:'free', value: 0}
                                                           ],
-                                                        io_reads: [{name:'rdsdev',value:0}, {name:'filesystem',value:0}],
-                                                        io_writes: [{name:'rdsdev',value:0}, {name:'filesystem',value:0}], 
-                                                        tps: [{name:'total_tps',value:0}], 
-                                                        io_queue: [{name:'avg_queue',value:0}], 
+                                                        io_reads_count: [{name:'filesystem',value:0}],
+                                                        io_writes_count: [{name:'filesystem',value:0}], 
+                                                        io_reads_bytes: [{name:'filesystem',value:0}],
+                                                        io_writes_bytes: [{name:'filesystem',value:0}], 
                                                         network: [{name:'tx',value:0}, {name:'rx',value:0}],
                                                         processlist : [],
                                                         timestamp : 0
@@ -205,10 +229,9 @@ export default function App() {
                                               charts : {
                                                         cpu : [],
                                                         memory : [],
-                                                        reads : [],
-                                                        writes : [],
-                                                        network_tx : [],
-                                                        network_rx : [],
+                                                        io_count : [],
+                                                        io_bytes : [],
+                                                        network: [],
                                                         timestamp : 0
                                               }
                                               
@@ -243,16 +266,16 @@ export default function App() {
         //--- API Call Performance Counters
         var api_params = {
                       connection: cnf_connection_id,
-                      sql_statement: "SHOW GLOBAL STATUS"
+                      sql_statement: dataMetricsQuery
                       };
 
         
-        Axios.get(`${configuration["apps-settings"]["api_url"]}/api/mysql/sql/`,{
+        Axios.get(`${configuration["apps-settings"]["api_url"]}/api/mssql/sql/`,{
               params: api_params
               }).then((data)=>{
 
                   var timeNow = new Date();
-                  var currentCounters = convertArrayToObject(data.data,'Variable_name');
+                  var currentCounters = convertArrayToObject(data.data.recordset,'counter_name');
                   
                   if ( initProcess.current === 0 ){
                     //-- Initialize snapshot data
@@ -264,32 +287,25 @@ export default function App() {
                   metricObjectGlobal.current.newSnapshot(currentCounters, timeNow.getTime());
                   
                   //-- Add metrics
-                  metricObjectGlobal.current.addPropertyValue('Com_select',metricObjectGlobal.current.getDelta('Com_select'));
-                  metricObjectGlobal.current.addPropertyValue('Com_update',metricObjectGlobal.current.getDelta('Com_update'));
-                  metricObjectGlobal.current.addPropertyValue('Com_delete',metricObjectGlobal.current.getDelta('Com_delete'));
-                  metricObjectGlobal.current.addPropertyValue('Com_insert',metricObjectGlobal.current.getDelta('Com_update'));
-                  metricObjectGlobal.current.addPropertyValue('Queries',metricObjectGlobal.current.getDelta('Queries'));
+                  metricObjectGlobal.current.addPropertyValue('Transactions',metricObjectGlobal.current.getDeltaByValue('Transactions/sec','cntr_value'));
+                  metricObjectGlobal.current.addPropertyValue('Requests',metricObjectGlobal.current.getDeltaByValue('Batch Requests/sec','cntr_value'));
                   
                   if (currentTabId.current === "tab01"){
                     
                       setDataMetricRealTime({ 
-                                            Queries:[metricObjectGlobal.current.getPropertyValues('Queries')],
-                                            Operations : [
-                                                          metricObjectGlobal.current.getPropertyValues('Com_select'),
-                                                          metricObjectGlobal.current.getPropertyValues('Com_update'),
-                                                          metricObjectGlobal.current.getPropertyValues('Com_delete'),
-                                                          metricObjectGlobal.current.getPropertyValues('Com_insert')
+                                            Transactions:[metricObjectGlobal.current.getPropertyValues('Transactions')],
+                                            Requests : [
+                                                          metricObjectGlobal.current.getPropertyValues('Requests')
                                                           ],
                                             refObject : metricObjectGlobal.current,
                                             timestamp : timeNow.getTime()
                       });
                   
                   }
-                  
-    
+               
               })
               .catch((err) => {
-                  console.log('Timeout API Call : /api/mysql/sql/' );
+                  console.log('Timeout API Call : /api/mssql/sql/' );
                   console.log(err)
                     
               });
@@ -310,16 +326,16 @@ export default function App() {
                       sql_statement: dataSessionQuery
                       };
     
-        Axios.get(`${configuration["apps-settings"]["api_url"]}/api/mysql/sql/`,{
+        Axios.get(`${configuration["apps-settings"]["api_url"]}/api/mssql/sql/`,{
               params: api_params
               }).then((data)=>{
                   
                   var timeNow = new Date();
-                  metricObjectGlobal.current.addPropertyValue('Sessions',data.data.length);
+                  metricObjectGlobal.current.addPropertyValue('Sessions',data.data.recordset.length);
                   if (currentTabId.current === "tab01"){
                     
                       setDataMetricRealTimeSession({ 
-                                            Sessions : data.data,
+                                            Sessions : data.data.recordset,
                                             SessionsTotal : [metricObjectGlobal.current.getPropertyValues('Sessions')],
                                             timestamp : timeNow.getTime()
                                             
@@ -330,7 +346,7 @@ export default function App() {
                   
               })
               .catch((err) => {
-                  console.log('Timeout API Call : /api/mysql/sql/' );
+                  console.log('Timeout API Call : /api/mssql/sql/' );
                   console.log(err)
                   
               });
@@ -345,92 +361,72 @@ export default function App() {
             Axios.get(`${configuration["apps-settings"]["api_url"]}/api/aws/clw/region/logs/`,{
                 params: { resource_id : cnf_rds_resource_id }
             }).then((data)=>{
-              
+
                 var time_now = new Date();
                 var message=JSON.parse(data.data.events[0].message);
                                                         
-                metricObjectGlobal.current.addPropertyValue('Cpu_total',message.cpuUtilization.total);
                 metricObjectGlobal.current.addPropertyValue('Cpu_user',message.cpuUtilization.user);
-                metricObjectGlobal.current.addPropertyValue('Cpu_system',message.cpuUtilization.system);
-                metricObjectGlobal.current.addPropertyValue('Cpu_wait',message.cpuUtilization.wait);
-                metricObjectGlobal.current.addPropertyValue('Cpu_irq',message.cpuUtilization.irq);
-                metricObjectGlobal.current.addPropertyValue('Cpu_guest',message.cpuUtilization.guest);
-                metricObjectGlobal.current.addPropertyValue('Cpu_steal',message.cpuUtilization.steal);
-                metricObjectGlobal.current.addPropertyValue('Cpu_nice',message.cpuUtilization.nice);
-                metricObjectGlobal.current.addPropertyValue('Memory_total',message.memory.total * 1024);
-                metricObjectGlobal.current.addPropertyValue('Memory_active',message.memory.active * 1024);
-                metricObjectGlobal.current.addPropertyValue('Memory_inactive',message.memory.inactive * 1024);
-                metricObjectGlobal.current.addPropertyValue('Memory_free',message.memory.free * 1024);
-                metricObjectGlobal.current.addPropertyValue('IO_reads_rsdev',message.diskIO[0].readIOsPS);
-                metricObjectGlobal.current.addPropertyValue('IO_reads_filesystem',message.diskIO[1].readIOsPS);
-                metricObjectGlobal.current.addPropertyValue('IO_writes_rsdev',message.diskIO[0].writeIOsPS);
-                metricObjectGlobal.current.addPropertyValue('IO_writes_filesystem',message.diskIO[1].writeIOsPS);
-                metricObjectGlobal.current.addPropertyValue('Network_tx',message.network[0].tx);
-                metricObjectGlobal.current.addPropertyValue('Network_rx',message.network[0].rx);
-                
+                metricObjectGlobal.current.addPropertyValue('Cpu_kern',message.cpuUtilization.kern);
+                metricObjectGlobal.current.addPropertyValue('Memory_total',message.memory.physTotKb * 1024);
+                metricObjectGlobal.current.addPropertyValue('Memory_sqlsrv',message.memory.sqlServerTotKb * 1024);
+                metricObjectGlobal.current.addPropertyValue('Memory_commit',message.memory.commitTotKb * 1024);
+                metricObjectGlobal.current.addPropertyValue('Memory_free',message.memory.physAvailKb * 1024);
+                metricObjectGlobal.current.addPropertyValue('IO_reads_count_ps',message.disks[0].rdCountPS);
+                metricObjectGlobal.current.addPropertyValue('IO_writes_count_ps',message.disks[0].wrCountPS);
+                metricObjectGlobal.current.addPropertyValue('IO_reads_bytes_ps',message.disks[0].rdBytesPS);
+                metricObjectGlobal.current.addPropertyValue('IO_writes_bytes_ps',message.disks[0].wrBytesPS);
+                metricObjectGlobal.current.addPropertyValue('Network_tx',message.network[0].wrBytesPS);
+                metricObjectGlobal.current.addPropertyValue('Network_rx',message.network[0].rdBytesPS);
                 
                 if (currentTabId.current === "tab01" || currentTabId.current === "tab03" ){
                   
                     setdataEnhancedMonitor({
                                counters :   {
-                                  cpu : [{name:'pct_usage', value: Math.trunc(message.cpuUtilization.total)},{name:'total_vcpu', value: message.numVCPUs}],
+                                  cpu : [{name:'pct_usage', value: Math.trunc(message.cpuUtilization.user + message.cpuUtilization.kern)},{name:'total_vcpu', value: message.numVCPUs}],
                                   cpu_detail : [
                                                 {name:'user', value: message.cpuUtilization.user},
-                                                {name:'system', value: message.cpuUtilization.system},
-                                                {name:'wait', value: message.cpuUtilization.wait},
-                                                {name:'irq', value: message.cpuUtilization.irq},
-                                                {name:'guest', value: message.cpuUtilization.guest},
-                                                {name:'steal', value: message.cpuUtilization.steal},
-                                                {name:'nice', value: message.cpuUtilization.nice}
+                                                {name:'kern', value: message.cpuUtilization.kenr}
                                   ],
-                                  memory : [{name: 'pct_usage', value : Math.trunc(( (message.memory.total-message.memory.free) / message.memory.total) * 100) } , {name:'total', value: message.memory.total*1024 }, {name : 'free', value: message.memory.free }, {name: 'active', value: message.memory.active}],
+                                  memory : [{name: 'pct_usage', value : Math.trunc(( (message.memory.physTotKb-message.memory.physAvailKb) / message.memory.physTotKb) * 100) } , {name:'total', value: message.memory.physTotKb*1024 }, {name : 'free', value: message.memory.physAvailKb }, {name: 'sqlsrv', value: message.memory.sqlServerTotKb}],
                                   memory_detail : [
-                                                {name:'total', value: message.memory.total},
-                                                {name:'active', value: message.memory.active},
-                                                {name:'inactive', value: message.memory.inactive},
-                                                {name:'free', value: message.memory.free}
+                                                {name:'total', value: message.memory.physTotKb},
+                                                {name:'commit', value: message.memory.commitTotKb},
+                                                {name:'sqlsrv', value: message.memory.sqlServerTotKb},
+                                                {name:'free', value: message.memory.physAvailKb}
                                   ],
-                                  io_reads : [{name:'rdsdev', value: message.diskIO[0].readIOsPS}, {name:'filesystem', value: message.diskIO[1].readIOsPS}],
-                                  io_writes : [{name:'rdsdev', value: message.diskIO[0].writeIOsPS}, {name:'filesystem', value: message.diskIO[1].writeIOsPS}],
-                                  network : [{name:'tx', value: message.network[0].tx}, {name:'rx', value: message.network[0].rx}],
-                                  tps: [{name:'total_tps',value: message.diskIO[0].tps + message.diskIO[1].tps }], 
-                                  io_queue: [{name:'avg_queue',value: message.diskIO[0].avgQueueLen + message.diskIO[1].avgQueueLen }], 
+                                  io_reads_count : [{name:'filesystem', value: message.disks[0].rdCountPS}],
+                                  io_writes_count : [{name:'filesystem', value: message.disks[0].wrCountPS}],
+                                  io_reads_bytes : [{name:'filesystem', value: message.disks[0].rdBytesPS}],
+                                  io_writes_bytes : [{name:'filesystem', value: message.disks[0].wrBytesPS}],
+                                  network : [{name:'tx', value: message.network[0].wrBytesPS}, {name:'rx', value: message.network[0].rdBytesPS}],
                                   processlist : message.processList,
                                   timestamp : message.timestamp
                                   
                                 },
                                 charts : {
                                               cpu : [
-                                                      metricObjectGlobal.current.getPropertyValues('Cpu_total'),
                                                       metricObjectGlobal.current.getPropertyValues('Cpu_user'),
-                                                      metricObjectGlobal.current.getPropertyValues('Cpu_system'),
-                                                      metricObjectGlobal.current.getPropertyValues('Cpu_wait'),
-                                                      metricObjectGlobal.current.getPropertyValues('Cpu_irq'),
-                                                      metricObjectGlobal.current.getPropertyValues('Cpu_guest'),
-                                                      metricObjectGlobal.current.getPropertyValues('Cpu_steal'),
-                                                      metricObjectGlobal.current.getPropertyValues('Cpu_nice')
+                                                      metricObjectGlobal.current.getPropertyValues('Cpu_kern')
                                                       ], 
                                               memory : [
                                                       metricObjectGlobal.current.getPropertyValues('Memory_total'),
-                                                      metricObjectGlobal.current.getPropertyValues('Memory_active'),
-                                                      metricObjectGlobal.current.getPropertyValues('Memory_inactive'),
+                                                      metricObjectGlobal.current.getPropertyValues('Memory_commit'),
+                                                      metricObjectGlobal.current.getPropertyValues('Memory_sqlsrv'),
                                                       metricObjectGlobal.current.getPropertyValues('Memory_free'),
                                                 ],
-                                              reads : [
-                                                      metricObjectGlobal.current.getPropertyValues('IO_reads_rsdev'),
-                                                      metricObjectGlobal.current.getPropertyValues('IO_reads_filesystem'),
+                                              io_count : [
+                                                      metricObjectGlobal.current.getPropertyValues('IO_reads_count_ps'),
+                                                      metricObjectGlobal.current.getPropertyValues('IO_writes_count_ps')
                                                       ],
-                                              writes : [
-                                                      metricObjectGlobal.current.getPropertyValues('IO_writes_rsdev'),
-                                                      metricObjectGlobal.current.getPropertyValues('IO_writes_filesystem'),
+                                              io_bytes : [
+                                                      metricObjectGlobal.current.getPropertyValues('IO_reads_bytes_ps'),
+                                                      metricObjectGlobal.current.getPropertyValues('IO_writes_bytes_ps')
                                                       ],
-                                              network_tx : [
+                                              network : [
                                                       metricObjectGlobal.current.getPropertyValues('Network_tx'),
+                                                      metricObjectGlobal.current.getPropertyValues('Network_rx')
                                                       ],
-                                              network_rx : [
-                                                      metricObjectGlobal.current.getPropertyValues('Network_rx'),
-                                                      ],
-                                                timestamp : time_now.getTime()
+                                              timestamp : time_now.getTime()
                                                 
                                 }
                       });
@@ -508,15 +504,14 @@ export default function App() {
           
         };
     
-        Axios.get(`${configuration["apps-settings"]["api_url"]}/api/mysql/sql/`,{
+        Axios.get(`${configuration["apps-settings"]["api_url"]}/api/mssql/sql/`,{
               params: api_params
               }).then((data)=>{
-                  
                   var colInfo=[];
                   try{
                     
-                        if (Array.isArray(data.data)){
-                            var columns = Object.keys(data.data[0]);
+                        if (Array.isArray(data.data.recordset)){
+                            var columns = Object.keys(data.data.recordset[0]);
                             columns.forEach(function(colItem) {
                                 colInfo.push({ id: colItem, header: colItem,cell: item => item[colItem] || "-",sortingField: colItem,isRowHeader: true });
                             })
@@ -528,8 +523,7 @@ export default function App() {
                     colInfo = [];
                     
                   }
-                  
-                  setdataQuery({columns:colInfo, dataset: data.data, result_code:0, result_info: ""});
+                  setdataQuery({columns:colInfo, dataset: data.data.recordset, result_code:0, result_info: ""});
                 
                 
               })
@@ -576,7 +570,7 @@ export default function App() {
         onSplitPanelToggle={() => setsplitPanelShow(false)}
         splitPanelSize={250}
         splitPanel={
-                  <SplitPanel  header={"Session Details (" + selectedItems[0].ThreadID + ")"} i18nStrings={splitPanelI18nStrings} closeBehavior="hide"
+                  <SplitPanel  header={"Session Details (" + selectedItems[0].session_id + ")"} i18nStrings={splitPanelI18nStrings} closeBehavior="hide"
                     onSplitPanelToggle={({ detail }) => {
                                     
                                     }
@@ -585,35 +579,35 @@ export default function App() {
                       
                     <ColumnLayout columns="4" variant="text-grid">
                          <div>
-                              <Box variant="awsui-key-label">ThreadID</Box>
-                              {selectedItems[0]['ThreadID']}
+                              <Box variant="awsui-key-label">SessionId</Box>
+                              {selectedItems[0]['session_id']}
                           </div>
                           <div>
                               <Box variant="awsui-key-label">Username</Box>
-                              {selectedItems[0]['Username']}
+                              {selectedItems[0]['login_name']}
                           </div>
                           <div>
                               <Box variant="awsui-key-label">Host</Box>
-                              {selectedItems[0]['Host']}
+                              {selectedItems[0]['host_name']}
                           </div>
                           <div>
                               <Box variant="awsui-key-label">Database</Box>
-                              {selectedItems[0]['Database']}
+                              {selectedItems[0]['database_name']}
                           </div>
                         </ColumnLayout>
                 
                         <ColumnLayout columns="4" variant="text-grid">
                          <div>
                               <Box variant="awsui-key-label">Time</Box>
-                              {selectedItems[0]['Time']}
+                              {selectedItems[0]['total_elapsed_time']}
                           </div>
                           <div>
                               <Box variant="awsui-key-label">State</Box>
-                              {selectedItems[0]['State']}
+                              {selectedItems[0]['status']}
                           </div>
                           <div>
                               <Box variant="awsui-key-label">SQLText</Box>
-                              {selectedItems[0]['SQLText']}
+                              {selectedItems[0]['sql_text']}
                           </div>
                         
                         </ColumnLayout>
@@ -666,30 +660,30 @@ export default function App() {
                                                       </td>
                                                       <td style={{"width":"12.5%", "border-left": "2px solid #e3e5e7", "padding-left": "1em"}}>
                                                           <CompMetric02
-                                                            value={dataEnhancedMonitor['counters']['tps'][0]['value']}
-                                                            title={"I/O TPS"}
+                                                            value={dataEnhancedMonitor['counters']['io_reads_bytes'][0]['value'] }
+                                                            title={"Reads (Bytes/sec)"}
                                                             precision={0}
                                                             format={3}
                                                           />
                                                       </td>
                                                       <td style={{"width":"12.5%", "border-left": "2px solid #e3e5e7", "padding-left": "1em"}}>
                                                           <CompMetric02
-                                                            value={dataEnhancedMonitor['counters']['io_queue'][0]['value']}
-                                                            title={"DiskQueue"}
+                                                            value={dataEnhancedMonitor['counters']['io_writes_bytes'][0]['value'] }
+                                                            title={"Writes (Bytes/sec)"}
                                                             precision={2}
                                                             format={2}
                                                           />
                                                       </td>
                                                       <td style={{"width":"12.5%", "border-left": "2px solid #e3e5e7", "padding-left": "1em"}}>
                                                           <CompMetric02
-                                                            value={dataEnhancedMonitor['counters']['io_reads'][0]['value'] + dataEnhancedMonitor['counters']['io_reads'][1]['value']}
+                                                            value={dataEnhancedMonitor['counters']['io_reads_count'][0]['value'] }
                                                             title={"Reads (IOPS)"}
                                                             precision={0}
                                                           />
                                                       </td>
                                                       <td style={{"width":"12.5%", "border-left": "2px solid #e3e5e7", "padding-left": "1em"}}>
                                                           <CompMetric02
-                                                            value={dataEnhancedMonitor['counters']['io_writes'][0]['value'] + dataEnhancedMonitor['counters']['io_writes'][1]['value']}
+                                                            value={dataEnhancedMonitor['counters']['io_writes_count'][0]['value'] }
                                                             title={"Write (IOPS)"}
                                                             precision={0}
                                                           />
@@ -720,56 +714,56 @@ export default function App() {
                                                   <tr>  
                                                     <td style={{"width":"12.5%","padding-left": "1em"}}> 
                                                         <CompMetric02
-                                                          value={dataMetricRealTime.refObject.getDelta('Queries')}
-                                                          title={"Queries/sec"}
+                                                          value={dataMetricRealTime.refObject.getDeltaByValue('Batch Requests/sec','cntr_value')}
+                                                          title={"Batch Requests/sec"}
                                                           precision={0}
                                                         />
  
                                                     </td>
                                                     <td style={{"width":"12.5%", "border-left": "2px solid #e3e5e7", "padding-left": "1em"}}>
                                                          <CompMetric02
-                                                          value={dataMetricRealTime.refObject.getDelta('Com_select')}
-                                                          title={"Selects/sec"}
+                                                          value={dataMetricRealTime.refObject.getDeltaByValue('Transactions/sec','cntr_value')}
+                                                          title={"Transactions/sec"}
                                                           type={1}
                                                           precision={0}
                                                         />
                                                     </td>
                                                     <td style={{"width":"12.5%", "border-left": "2px solid #e3e5e7", "padding-left": "1em"}}>
                                                          <CompMetric02
-                                                          value={dataMetricRealTime.refObject.getDelta('Com_insert')}
-                                                          title={"Insert/sec"}
+                                                          value={dataMetricRealTime.refObject.getDeltaByValue('SQL Compilations/sec','cntr_value')}
+                                                          title={"SQL Compilations/sec"}
                                                           type={1}
                                                           precision={0}
                                                         />
                                                     </td>
                                                     <td style={{"width":"12.5%", "border-left": "2px solid #e3e5e7", "padding-left": "1em"}}>
                                                          <CompMetric02
-                                                          value={dataMetricRealTime.refObject.getDelta('Com_update')}
-                                                          title={"Update/sec"}
+                                                          value={dataMetricRealTime.refObject.getDeltaByValue('SQL Re-Compilations/sec','cntr_value')}
+                                                          title={"SQL Re-Compilations/sec"}
                                                           type={1}
                                                           precision={0}
                                                         />
                                                     </td>
                                                     <td style={{"width":"12.5%", "border-left": "2px solid #e3e5e7", "padding-left": "1em"}}>
                                                          <CompMetric02
-                                                          value={dataMetricRealTime.refObject.getDelta('Com_delete')}
-                                                          title={"Delete/sec"}
+                                                          value={dataMetricRealTime.refObject.getDeltaByValue('Logins/sec','cntr_value')}
+                                                          title={"Logins/sec"}
                                                           type={1}
                                                           precision={0}
                                                         />
                                                     </td>
                                                     <td style={{"width":"12.5%", "border-left": "2px solid #e3e5e7", "padding-left": "1em"}}>
                                                         <CompMetric02
-                                                          value={dataMetricRealTime.refObject.getValue('Threads_connected')}
-                                                          title={"Threads"}
+                                                          value={dataMetricRealTime.refObject.getValueByValue('User Connections','cntr_value')}
+                                                          title={"User Connections"}
                                                           type={2}
                                                           precision={0}
                                                         />
                                                     </td>
                                                     <td style={{"width":"12.5%", "border-left": "2px solid #e3e5e7", "padding-left": "1em"}}>
                                                          <CompMetric02
-                                                          value={dataMetricRealTime.refObject.getDelta('Bytes_received')}
-                                                          title={"BytesReceived/sec"}
+                                                          value={dataMetricRealTime.refObject.getDeltaByValue('Page writes/sec','cntr_value')}
+                                                          title={"Page writes/sec"}
                                                           type={1}
                                                           precision={0}
                                                           format={2}
@@ -777,8 +771,8 @@ export default function App() {
                                                     </td>
                                                     <td style={{"width":"12.5%", "border-left": "2px solid #e3e5e7", "padding-left": "1em"}}>
                                                         <CompMetric02
-                                                          value={dataMetricRealTime.refObject.getDelta('Bytes_sent')}
-                                                          title={"BytesSent/sec"}
+                                                          value={dataMetricRealTime.refObject.getDeltaByValue('Page reads/sec','cntr_value')}
+                                                          title={"Page reads/sec"}
                                                           type={1}
                                                           precision={0}
                                                           format={2}
@@ -788,7 +782,6 @@ export default function App() {
                                               </tr>  
                                               
                                               </table>  
-                                               
                                               <br />
                                               <table style={{"width":"100%"}}>
                                                   <tr>  
@@ -796,10 +789,10 @@ export default function App() {
                                                         <ChartLine02 series={dataMetricRealTimeSession['SessionsTotal']} timestamp={dataMetricRealTime['timestamp']} title={"Active Sessions"} height="200px" />
                                                     </td>
                                                     <td style={{"width":"25%","padding-left": "1em"}}> 
-                                                        <ChartLine02 series={dataMetricRealTime['Queries']} timestamp={dataMetricRealTime['timestamp']} title={"Queries/sec"} height="200px" />
+                                                        <ChartLine02 series={dataMetricRealTime['Requests']} timestamp={dataMetricRealTime['timestamp']} title={"Batch Requests/sec"} height="200px" />
                                                     </td>
                                                     <td style={{"width":"25%","padding-left": "1em"}}> 
-                                                        <ChartLine02 series={dataMetricRealTime['Operations']} timestamp={dataMetricRealTime['timestamp']} title={"Operations/sec"} height="200px" />
+                                                        <ChartLine02 series={dataMetricRealTime['Transactions']} timestamp={dataMetricRealTime['timestamp']} title={"Transactions/sec"} height="200px" />
                                                     </td>
                                                   </tr>
                                               </table>
@@ -1173,7 +1166,6 @@ export default function App() {
                         id: "tab03",
                         content: 
                         <>
-                        
                         <table style={{"width":"100%", "padding": "1em"}}>
                             <tr>  
                                <td> 
@@ -1202,39 +1194,11 @@ export default function App() {
                                                     
                                                     <CompMetric03
                                                       value={dataEnhancedMonitor['counters']['cpu_detail'][1]['value']}
-                                                      title={"System"}
+                                                      title={"Kernel"}
                                                       precision={1}
                                                       format={1}
                                                     />
                                                     
-                                                    <CompMetric03
-                                                      value={dataEnhancedMonitor['counters']['cpu_detail'][2]['value']}
-                                                      title={"Wait"}
-                                                      precision={1}
-                                                      format={1}
-                                                    />
-                                                    
-                                                    <CompMetric03
-                                                      value={dataEnhancedMonitor['counters']['cpu_detail'][5]['value']}
-                                                      title={"Steal"}
-                                                      precision={1}
-                                                      format={1}
-                                                    />
-                                                    
-                                                    <CompMetric03
-                                                      value={dataEnhancedMonitor['counters']['cpu_detail'][6]['value']}
-                                                      title={"Nice"}
-                                                      precision={1}
-                                                      format={1}
-                                                    />
-                                                    
-                                                    <CompMetric03
-                                                      value={dataEnhancedMonitor['counters']['cpu_detail'][4]['value']}
-                                                      title={"Guest"}
-                                                      precision={1}
-                                                      format={1}
-                                                    />
-                                                  
                                                 </ColumnLayout>
                                                 
                                           </td>
@@ -1274,14 +1238,14 @@ export default function App() {
                                                   
                                                     <CompMetric03
                                                         value={dataEnhancedMonitor['counters']['memory_detail'][1]['value']*1024}
-                                                        title={"Active"}
+                                                        title={"Commited"}
                                                         precision={0}
                                                         format={2}
                                                     />
                                                     
                                                     <CompMetric03
                                                         value={dataEnhancedMonitor['counters']['memory_detail'][2]['value']*1024}
-                                                        title={"Inactive"}
+                                                        title={"SQLServer"}
                                                         precision={0}
                                                         format={2}
                                                     />
@@ -1315,7 +1279,7 @@ export default function App() {
                                               
                                               <Box variant="h4">I/O Reads</Box>
                                               <CompMetric02
-                                                value={dataEnhancedMonitor['counters']['io_reads'][0]['value'] + dataEnhancedMonitor['counters']['io_reads'][1]['value']}
+                                                value={dataEnhancedMonitor['counters']['io_reads_count'][0]['value']}
                                                 title={"IOPS"}
                                                 precision={0}
                                               />
@@ -1324,28 +1288,53 @@ export default function App() {
                                           <td style={{"width":"15%", "text-align":"center", "border-left": "2px solid red"}}>  
                                               <Box variant="h4">I/O Writes</Box>
                                               <CompMetric02
-                                                value={dataEnhancedMonitor['counters']['io_writes'][0]['value'] + dataEnhancedMonitor['counters']['io_writes'][1]['value']}
+                                                value={dataEnhancedMonitor['counters']['io_writes_count'][0]['value']}
                                                 title={"IOPS"}
                                                 precision={0}
                                               />
                                           </td>
                           
-                                          <td style={{"width":"35%"}}>    
+                                          <td style={{"width":"70%"}}>    
                                               <ChartLine02 
-                                                    series={dataEnhancedMonitor['charts']['reads']} 
+                                                    series={dataEnhancedMonitor['charts']['io_count']} 
                                                     timestamp={dataEnhancedMonitor['charts']['timestamp']} 
                                                     title={"I/O Reads"} height="200px" 
                                                 />
                                           </td>
                                           
-                                          <td style={{"width":"35%", "padding-left": "1em"}}>        
+                                        
+                                      </tr>
+                                  </table>
+                                  </Container>
+                                  <br/>
+                                  <Container>
+                                  <table style={{"width":"100%"}}>
+                                      <tr>  
+                                      
+                                          <td style={{"width":"15%", "text-align":"center"}}>      
+                                              
+                                              <Box variant="h4">I/O Reads</Box>
+                                              <CompMetric02
+                                                value={dataEnhancedMonitor['counters']['io_reads_bytes'][0]['value']}
+                                                title={"Bytes/sec"}
+                                                precision={0}
+                                              />
+                                          </td>
+                                          <td style={{"width":"15%", "text-align":"center", "border-left": "2px solid red"}}>  
+                                              <Box variant="h4">I/O Writes</Box>
+                                              <CompMetric02
+                                                value={dataEnhancedMonitor['counters']['io_writes_bytes'][0]['value']}
+                                                title={"Bytes/sec"}
+                                                precision={0}
+                                              />
+                                          </td>
+                                          <td style={{"width":"70%"}}>    
                                               <ChartLine02 
-                                                    series={dataEnhancedMonitor['charts']['writes']} 
+                                                    series={dataEnhancedMonitor['charts']['io_bytes']} 
                                                     timestamp={dataEnhancedMonitor['charts']['timestamp']} 
-                                                    title={"I/O Writes"} height="200px" 
+                                                    title={"I/O Reads"} height="200px" 
                                                 />
                                           </td>
-                                        
                                       </tr>
                                   </table>
                                   </Container>
@@ -1374,19 +1363,11 @@ export default function App() {
                                               />
                                           </td>
                           
-                                          <td style={{"width":"35%"}}>        
+                                          <td style={{"width":"70%"}}>        
                                               <ChartLine02 
-                                                    series={dataEnhancedMonitor['charts']['network_tx']} 
+                                                    series={dataEnhancedMonitor['charts']['network']} 
                                                     timestamp={dataEnhancedMonitor['charts']['timestamp']} 
                                                     title={"Network(TX)"} height="200px" 
-                                                />
-                                          </td>
-                                          
-                                          <td style={{"width":"35%", "padding-left": "1em"}}>        
-                                              <ChartLine02 
-                                                    series={dataEnhancedMonitor['charts']['network_rx']} 
-                                                    timestamp={dataEnhancedMonitor['charts']['timestamp']} 
-                                                    title={"Network(RX)"} height="200px" 
                                                 />
                                           </td>
                                         
@@ -1454,13 +1435,12 @@ export default function App() {
                                           </td>
                                       </tr>
                                   </table>
+                                  
                                   </Container>
-                                  
-                                  
                                   </td>
                             </tr>
                         </table>  
-                                    
+                             
                         </>
                           
                         ,

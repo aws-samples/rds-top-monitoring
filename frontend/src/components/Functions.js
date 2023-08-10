@@ -60,6 +60,21 @@ export class classMetric {
             }
           }
           
+          getDeltaByValue(propertyName,propertyValue) { 
+              try
+              {
+                    return ( 
+                                    (
+                                            (this.currentObject[propertyName][propertyValue] - this.oldObject[propertyName][propertyValue]) / 
+                                            (Math.abs(this.currentTime - this.oldTime) / 1000)
+                                    ) || 0
+                    ) ;
+              } 
+              catch(e) {
+                        return 0;       
+            }
+          }
+          
           getDeltaByIndex(propertyName) { 
               try
               {
@@ -79,6 +94,16 @@ export class classMetric {
           try
               {
                     return (this.currentObject[propertyName]['Value']) ;
+              } 
+              catch(e) {
+                        return 0;       
+            }
+          }
+          
+          getValueByValue(propertyName,propertyValue) { 
+          try
+              {
+                    return (this.currentObject[propertyName][propertyValue]) ;
               } 
               catch(e) {
                         return 0;       

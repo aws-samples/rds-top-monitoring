@@ -55,6 +55,13 @@ var db=[];
 const postgresql = require('pg').Pool
 
 
+// SQLServer Variables
+const mssql = require('mssql')
+
+// ORACLE Variables
+const oracle = require('oracledb')
+
+
 // Startup - Download PEMs Keys
 gatherPemKeys(issCognitoIdp);
 
@@ -180,6 +187,7 @@ app.post("/api/security/rds/auth/", csrfProtection, (req,res)=>{
 
     // API Call
     var params = req.body.params;
+    
     try {
         
         switch(params.engine)
@@ -204,7 +212,6 @@ app.post("/api/security/rds/auth/", csrfProtection, (req,res)=>{
                         mysqlOpenConnection(session_id,params.host,params.port,params.username,params.password);
                         
                         var token = generateToken({ session_id: session_id});
-                        //res.render('login', { csrfToken: req.csrfToken() });
                         res.status(200).send( {"result":"auth1", "session_id": session_id, "session_token": token });
                       }
                       
@@ -237,7 +244,77 @@ app.post("/api/security/rds/auth/", csrfProtection, (req,res)=>{
                       }
                       
                     });
+                    break;
+            
+            //-- MSSQL CONNECTION    
+            case 'sqlserver-se':
+            case 'sqlserver-ee':
+            case 'sqlserver-ex':
+            case 'sqlserver-web':
                     
+                    
+                    var dbconnection = new mssql.ConnectionPool({
+                        user: params.username,
+                        password: params.password,
+                        server: params.host,
+                        database: 'master',
+                        port : params.port,
+                        pool: {
+                            max: 2,
+                            min: 0,
+                            idleTimeoutMillis: 30000
+                        },
+                        options: {
+                            trustServerCertificate: true,
+                        }
+                    });
+    
+                   
+                    dbconnection.connect(function(err) {
+                      if (err) {
+                        res.status(200).send( {"result":"auth0", "session_id": 0});
+                      } else {
+                        dbconnection.close();
+                        var session_id=uuid.v4();
+                        mssqlOpenConnection(session_id,params.host,params.port,params.username,params.password);
+                        
+                        var token = generateToken({ session_id: session_id});
+                        res.status(200).send( {"result":"auth1", "session_id": session_id, "session_token": token});
+                      }
+                      
+                    });
+                    
+                    break;
+            
+            //-- ORACLE CONNECTION
+            case 'oracle-ee':
+            case 'oracle-ee-cdb':
+            case 'oracle-se2':
+            case 'oracle-se2-cdb':
+                    
+                    oracle.getConnection({
+                    user: params.username,
+                    password: params.password,
+                    connectString: params.host + ":" + params.port + "/" + params.instance 
+                    }, function(err,connection) {
+                        if (err) {
+                            console.log(err);
+                            res.status(200).send( {"result":"auth0", "session_id": 0});
+                        } 
+                        else {
+                            connection.close(function(err) {
+                              if (err) {console.log(err);}
+                            });
+                            var session_id=uuid.v4();
+                            oracleOpenConnection(session_id,params.host,params.port,params.username,params.password,params.instance);
+                            
+                            var token = generateToken({ session_id: session_id});
+                            res.status(200).send( {"result":"auth1", "session_id": session_id, "session_token": token});
+                        
+                        }
+                        
+                    });
+                
                     break;
   
         }
@@ -293,6 +370,37 @@ app.get("/api/security/rds/disconnect/", (req,res)=>{
                 delete db[req.query.session_id];
                 res.status(200).send( {"result":"disconnected", "session_id": req.query.session_id});
                 break;
+            
+            case 'sqlserver-se':
+            case 'sqlserver-ee':
+            case 'sqlserver-ex':
+            case 'sqlserver-web':
+                console.log("API MSSQL Disconnection - SessionID : " + req.query.session_id)
+                db[req.query.session_id].close();
+                delete db[req.query.session_id];
+                res.status(200).send( {"result":"disconnected", "session_id": req.query.session_id});
+                break;
+
+            case 'oracle-ee':
+            case 'oracle-ee-cdb':
+            case 'oracle-se2':
+            case 'oracle-se2-cdb':
+                
+                console.log("API ORACLE Disconnection - SessionID : " + req.query.session_id)
+                db[req.query.session_id].close(function(err) {
+                        if (err) {
+                            delete db[req.query.session_id];
+                            res.status(401).send( {"result":"disconnected", "session_id": req.query.session_id});
+                        } 
+                        else {
+                            delete db[req.query.session_id];
+                            res.status(200).send( {"result":"disconnected", "session_id": req.query.session_id});
+                            
+                        }
+                        
+                    });
+                
+                break;
 
         }
         
@@ -311,6 +419,79 @@ app.get("/api/security/rds/disconnect/", (req,res)=>{
 
 
 //--#################################################################################################### 
+//   ---------------------------------------- MSSQL
+//--#################################################################################################### 
+
+// MSSQL : Create Connection
+function mssqlOpenConnection(session_id,host,port,user,password){
+    
+    db[session_id] = new mssql.ConnectionPool({
+                        user: user,
+                        password: password,
+                        server: host,
+                        database: 'master',
+                        port : port,
+                        pool: {
+                            max: 2,
+                            min: 0,
+                            idleTimeoutMillis: 30000
+                        },
+                        options: {
+                            trustServerCertificate: true,
+                        }
+                    });
+    
+    db[session_id].connect(function(err) {
+                      if (err) {
+                        console.log("mssql error connection");
+                      }
+                      
+    });
+    
+    console.log("Mssql Connection opened for session_id : " + session_id);
+    
+    
+}
+
+
+// MSSQL : API Execute SQL Query
+app.get("/api/mssql/sql/", (req,res)=>{
+
+    // Token Validation
+    var standardToken = verifyToken(req.headers['x-token']);
+    var cognitoToken = verifyTokenCognito(req.headers['x-token-cognito']);
+
+    if (standardToken.isValid === false || cognitoToken.isValid === false)
+        return res.status(511).send({ data: [], message : "Token is invalid. StandardToken : " + String(standardToken.isValid) + ", CognitoToken : " + String(cognitoToken.isValid) });
+
+
+    // API Call
+    var params = req.query;
+    
+    try {
+        
+        db[standardToken.session_id].query(params.sql_statement, (err,result)=>{
+                        if(err) {
+                            console.log(err)
+                            res.status(404).send(err);
+                        } 
+                        else {
+                            res.status(200).send(result);
+                        }
+
+                }
+            );   
+
+
+    } catch(error) {
+        console.log(error)
+                
+    }
+
+});
+
+
+//--#################################################################################################### 
 //   ---------------------------------------- POSTGRESQL
 //--#################################################################################################### 
 
@@ -326,7 +507,7 @@ function postgresqlOpenConnection(session_id,host,port,user,password){
             max: 2,
     })
     
-    console.log("Postgresql Connection opened for session_id" + session_id);
+    console.log("Postgresql Connection opened for session_id : " + session_id);
     
     
 }
@@ -370,7 +551,6 @@ app.get("/api/postgres/sql/", (req,res)=>{
 
 
 
-
 //--#################################################################################################### 
 //   ---------------------------------------- MYSQL
 //--#################################################################################################### 
@@ -389,7 +569,7 @@ function mysqlOpenConnection(session_id,host,port,user,password){
             connectionLimit:2
     })
 
-    console.log("Mysql Connection opened for session_id" + session_id);
+    console.log("Mysql Connection opened for session_id : " + session_id);
 
 }
 
@@ -431,6 +611,53 @@ app.get("/api/mysql/sql/", (req,res)=>{
     }
 
 });
+
+
+
+//--#################################################################################################### 
+//   ---------------------------------------- ORACLE
+//--#################################################################################################### 
+
+app.get('/api/oracle/sql/', function (req, res) {
+
+    var standardToken = verifyToken(req.headers['x-token']);
+    var cognitoToken = verifyTokenCognito(req.headers['x-token-cognito']);
+
+    if (standardToken.isValid === false || cognitoToken.isValid === false)
+        return res.status(511).send({ data: [], message : "Token is invalid. StandardToken : " + String(standardToken.isValid) + ", CognitoToken : " + String(cognitoToken.isValid) });
+
+    // API Call
+    var params = req.query;
+    db[standardToken.session_id].execute(params.sql_statement, (err,result)=>{
+                    if(err) {
+                        console.log(err)
+                        res.status(404).send(err);
+                    } 
+                    else {
+                        return res.status(200).send({ rows : result.rows, metadata : result.metaData });
+                    }
+
+            }
+    );   
+
+})
+
+// ORACLE : Create Connection
+async function oracleOpenConnection(session_id,host,port,user,password,instance){
+
+    try {
+         db[session_id] = await oracle.getConnection({
+                    user: user,
+                    password: password,
+                    connectString: host + ":" + port + "/" + instance
+                    });
+     } 
+    catch (err) {
+        console.log(err.message);
+    } 
+    console.log("Oracle Connection opened for session_id : " + session_id);
+
+}
 
 
 

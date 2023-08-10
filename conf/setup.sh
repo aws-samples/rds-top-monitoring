@@ -5,7 +5,7 @@ sudo yum install -y nginx
 
 #Create Certificates
 sudo mkdir /etc/nginx/ssl/
-sudo openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout /etc/nginx/ssl/server.key -out /etc/nginx/ssl/server.crt -subj "/C=US/ST=US/L=US/O=Global Security/OU=IT Department/CN=18.206.156.245"
+sudo openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout /etc/nginx/ssl/server.key -out /etc/nginx/ssl/server.crt -subj "/C=US/ST=US/L=US/O=Global Security/OU=IT Department/CN=127.0.0.1"
 
 #Copy Configurations
 sudo cp conf/api.core.service /usr/lib/systemd/system/api.core.service

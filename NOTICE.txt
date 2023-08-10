@@ -28,6 +28,8 @@ express under the Massachusetts Institute of Technology (MIT) license
 jsonwebtoken under the Massachusetts Institute of Technology (MIT) license
 jwk-to-pem under the Apache License 2.0
 mysql under the Massachusetts Institute of Technology (MIT) license
+mssql under the Massachusetts Institute of Technology (MIT) license
+oracledb under the Apache License 2.0
 pg under the Massachusetts Institute of Technology (MIT) license
 uuid under the Massachusetts Institute of Technology (MIT) license
 

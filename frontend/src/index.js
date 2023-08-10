@@ -21,6 +21,8 @@ import SmMysql01 from "./pages/Sm-mysql-01";
 import SmMysql02 from "./pages/Sm-mysql-02";
 import SmPostgresql01 from "./pages/Sm-postgresql-01";
 import SmPostgresql02 from "./pages/Sm-postgresql-02";
+import SmMssql01 from "./pages/Sm-mssql-01";
+import SmOracle01 from "./pages/Sm-oracle-01";
 
 //-- Components
 import ProtectedDb from "./components/ProtectedDb";
@@ -60,6 +62,8 @@ Axios.get(`/aws-exports.json`,).then((data)=>{
                     <Route path="/sm-mysql-02" element={<ProtectedApp><ProtectedDb> <SmMysql02 /></ProtectedDb> </ProtectedApp>} />
                     <Route path="/sm-postgresql-01" element={<ProtectedApp><ProtectedDb> <SmPostgresql01 /></ProtectedDb> </ProtectedApp>} />
                     <Route path="/sm-postgresql-02" element={<ProtectedApp><ProtectedDb> <SmPostgresql02 /></ProtectedDb> </ProtectedApp>} />
+                    <Route path="/sm-mssql-01" element={<ProtectedApp><ProtectedDb> <SmMssql01 /></ProtectedDb> </ProtectedApp>} />
+                    <Route path="/sm-oracle-01" element={<ProtectedApp><ProtectedDb> <SmOracle01 /></ProtectedDb> </ProtectedApp>} />
                 </Routes>
               </BrowserRouter>
           </Authenticator.Provider>
