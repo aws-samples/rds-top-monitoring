@@ -79,8 +79,10 @@ Parameters:
       Type: String
       Description: Segurity Group Inbound Access (0.0.0.0/0)
       
-  
-      
+Conditions:  
+  IsPublicAccess:
+    !Equals [!Ref PublicAccess, "true"]
+
 Resources:
     InstanceProfile: 
         Type: "AWS::IAM::InstanceProfile"
@@ -331,8 +333,10 @@ Resources:
 
 Outputs:
     PublicAppURL:
+        Condition: IsPublicAccess
         Description: Public Endpoint
         Value: !Join [ "", ["https://", !GetAtt EC2Instance.PublicIp]]
+        
     PrivateAppURL:
         Description: Private Endpoint
         Value: !Join [ "", ["https://", !GetAtt EC2Instance.PrivateIp]]

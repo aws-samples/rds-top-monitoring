@@ -2,6 +2,7 @@
 #Install Software Packages
 sudo yum install -y openssl
 sudo yum install -y nginx
+sudo service nginx restart
 
 #Create Certificates
 sudo mkdir /etc/nginx/ssl/
